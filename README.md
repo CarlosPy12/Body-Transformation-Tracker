@@ -1,0 +1,80 @@
+# Body Tracker
+
+PWA PHP 8/MySQL per monitorare peso, composizione corporea, GLP-1, obiettivi, allenamenti, passi da Google Drive, calendario e notifiche push. Tutta la UI e i messaggi sono in italiano.
+
+## Stack
+
+- PHP 8.x, PDO, sessioni PHP, CSRF, `password_hash()` / `password_verify()`.
+- MySQL 8.x o MariaDB compatibile come unica fonte autoritativa.
+- HTML, CSS, JavaScript vanilla, Chart.js, Service Worker, Web Push.
+- Cron PHP HostGator per passi e notifiche.
+- Google Drive API con Service Account per Health Sync.
+
+## Setup HostGator
+
+1. Crea un database MySQL e un utente con permessi sul database.
+2. Carica il repository sul server, con document root puntata a `public/`.
+3. Esegui `composer install --no-dev --optimize-autoloader`.
+4. Copia `.env.example` in `.env` fuori da `public/` e compila i valori reali.
+5. Importa `database/migrations/001_initial_schema.sql` nel database.
+6. Imposta PHP 8.x e HTTPS obbligatorio.
+7. Assicurati che `storage/logs` e `storage/uploads` siano scrivibili dal processo PHP.
+8. Configura `FIRST_ADMIN_EMAIL`, `FIRST_ADMIN_PASSWORD`, `FIRST_ADMIN_NAME`, poi esegui `php database/seeds/create_super_admin.php`.
+9. Dopo la creazione admin, rimuovi la password dal `.env` o sostituiscila.
+10. Crea le chiavi VAPID e configura `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
+11. Crea un Google Cloud Project, abilita Drive API, crea un Service Account e salva il JSON fuori da `public/`.
+12. Condividi la cartella Health Sync con l'email del Service Account.
+13. Inserisci `GOOGLE_DRIVE_STEPS_FOLDER_ID` e `GOOGLE_SERVICE_ACCOUNT_JSON_PATH` nel `.env`.
+14. Configura cron cPanel:
+    - `*/15 * * * * /usr/local/bin/php /home/utente/app/cron/sync_steps.php`
+    - `0 9 * * * /usr/local/bin/php /home/utente/app/cron/send_notifications.php`
+15. Apri il dominio, fai login e installa la PWA su Android dal browser.
+
+## Valori reali da fornire
+
+- Credenziali MySQL: host, database, utente, password.
+- URL pubblico HTTPS in `APP_URL`.
+- Email, nome e password temporanea del primo `super_admin`.
+- Chiavi VAPID.
+- Path del JSON Service Account Google.
+- Folder ID della cartella Google Drive di Health Sync.
+- URL della repository GitHub come remote `origin`.
+
+## Test
+
+Esegui:
+
+```bash
+php tests/run.php
+```
+
+I test coprono parser bilancia, decimali italiani, NULL, deduplica, parser passi, esclusione aggregati, authorization e transizione GLP-1.
+
+## Import CSV bilancia
+
+Il parser cerca l'header `Data;Ora;kg;IMC;...` anche se non si trova nella prima riga. I decimali italiani vengono convertiti per MySQL, i campi vuoti restano `NULL`, e la deduplica usa `UNIQUE(user_id, measurement_hash)`.
+
+Le anomalie sono warning basati sullo storico recente dell'utente e sulla soglia relativa configurabile `ANOMALY_RELATIVE_THRESHOLD`.
+
+## Share Target Android
+
+Il manifest espone la PWA come destinazione di condivisione per CSV. I file ricevuti vengono salvati in `storage/uploads`, validati e poi aperti nel flusso di preview import dopo il login.
+
+## Google Drive
+
+Il cron `cron/sync_steps.php` processa solo file con nome:
+
+```regex
+^Passi \d{4}\.\d{2}\.\d{2} Huawei Health\.csv$
+```
+
+Somma la colonna `Passi` e fa UPSERT in `daily_steps`, mantenendo una sola riga per `user_id + step_date`.
+
+## Sicurezza
+
+- Nessun secret e nessuna password nel repository.
+- Cookie `HttpOnly`, `SameSite=Lax`, `Secure` quando HTTPS e configurazione produzione sono attivi.
+- Prepared statements PDO.
+- Rate limiting login.
+- Controlli server-side su `user_id`.
+- Upload CSV fuori dalla web root.

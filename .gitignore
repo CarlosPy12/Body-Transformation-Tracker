@@ -1,0 +1,8 @@
+.env
+/vendor/
+/storage/logs/*.log
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/storage/google-service-account.json
+.DS_Store
+Thumbs.db

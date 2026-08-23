@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services;
+
+use App\Repositories\MeasurementRepository;
+use DateInterval;
+use DateTimeImmutable;
+use PDO;
+
+final class ResultsService
+{
+    public function __construct(private PDO $pdo)
+    {
+    }
+
+    public function metric(int $userId, string $metric, string $range): array
+    {
+        $from = $this->rangeStart($range);
+        if ($metric === 'passi') {
+            return $this->stepsMetric($userId, $from);
+        }
+
+        $series = (new MeasurementRepository($this->pdo))->series($userId, $metric, $from);
+        $values = array_map('floatval', array_column($series, 'value'));
+        return [
+            'series' => $series,
+            'kpi' => $this->bodyKpi($values),
+            'glp1_overlay' => $this->glp1Overlay($userId, $from),
+        ];
+    }
+
+    private function rangeStart(string $range): string
+    {
+        $now = new DateTimeImmutable('now');
+        return match ($range) {
+            '1m' => $now->sub(new DateInterval('P1M'))->format('Y-m-d 00:00:00'),
+            '3m' => $now->sub(new DateInterval('P3M'))->format('Y-m-d 00:00:00'),
+            '6m' => $now->sub(new DateInterval('P6M'))->format('Y-m-d 00:00:00'),
+            '1y' => $now->sub(new DateInterval('P1Y'))->format('Y-m-d 00:00:00'),
+            default => '1970-01-01 00:00:00',
+        };
+    }
+
+    /** @param array<int,float> $values */
+    private function bodyKpi(array $values): array
+    {
+        if (!$values) {
+            return [];
+        }
+        $first = $values[0];
+        $last = $values[array_key_last($values)];
+        return [
+            'valore_corrente' => $last,
+            'valore_iniziale' => $first,
+            'variazione_totale' => $last - $first,
+            'variazione_percentuale' => $first != 0.0 ? (($last - $first) / $first) * 100 : null,
+            'media_periodo' => array_sum($values) / count($values),
+            'minimo' => min($values),
+            'massimo' => max($values),
+        ];
+    }
+
+    private function stepsMetric(int $userId, string $from): array
+    {
+        $stmt = $this->pdo->prepare('SELECT step_date AS date, steps AS value FROM daily_steps WHERE user_id = ? AND step_date >= DATE(?) ORDER BY step_date');
+        $stmt->execute([$userId, $from]);
+        $series = $stmt->fetchAll();
+        $values = array_map('intval', array_column($series, 'value'));
+        return [
+            'series' => $series,
+            'kpi' => [
+                'media_giornaliera' => $values ? array_sum($values) / count($values) : 0,
+                'totale_periodo' => array_sum($values),
+                'giorni_sopra_obiettivo' => count(array_filter($values, static fn ($v) => $v >= 10000)),
+                'percentuale_giorni_target' => $values ? count(array_filter($values, static fn ($v) => $v >= 10000)) / count($values) * 100 : 0,
+            ],
+            'glp1_overlay' => [],
+        ];
+    }
+
+    private function glp1Overlay(int $userId, string $from): array
+    {
+        $stmt = $this->pdo->prepare('SELECT scheduled_at, administered_at, planned_dose_mg, administered_dose_mg, status FROM glp1_injections WHERE user_id = ? AND scheduled_at >= ? ORDER BY scheduled_at');
+        $stmt->execute([$userId, $from]);
+        return $stmt->fetchAll();
+    }
+}

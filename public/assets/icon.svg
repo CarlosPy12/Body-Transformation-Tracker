@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Body Tracker">
+  <rect width="512" height="512" rx="112" fill="#071011"/>
+  <circle cx="256" cy="256" r="172" fill="#102024" stroke="#22d8cf" stroke-width="18"/>
+  <path d="M130 278h54l34-88 58 160 42-118 26 46h38" fill="none" stroke="#98e33f" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="386" cy="150" r="22" fill="#ff9b50"/>
+</svg>
