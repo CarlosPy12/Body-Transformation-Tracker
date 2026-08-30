@@ -12,8 +12,6 @@ use App\Services\ResultsService;
 use App\Support\Database;
 use App\Support\Response;
 
-$pdo = Database::pdo();
-$auth = new AuthService($pdo);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = trim((string) ($_GET['path'] ?? ''), '/');
 $input = json_decode(file_get_contents('php://input') ?: '{}', true) ?: [];
@@ -38,6 +36,9 @@ function require_csrf(AuthService $auth): void
 }
 
 try {
+    $pdo = Database::pdo();
+    $auth = new AuthService($pdo);
+
     if ($path === 'auth/login' && $method === 'POST') {
         if ($auth->login((string) ($input['email'] ?? ''), (string) ($input['password'] ?? ''))) {
             Response::ok(['user' => $auth->user(), 'csrf_token' => $auth->csrfToken()]);

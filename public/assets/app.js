@@ -28,7 +28,16 @@ async function api(path, options = {}) {
   const route = amp === -1 ? path : path.slice(0, amp);
   const query = amp === -1 ? '' : path.slice(amp + 1);
   const res = await fetch(`/api/index.php?path=${encodeURIComponent(route)}${query ? `&${query}` : ''}`, { ...options, headers });
-  const json = await res.json();
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(`Risposta vuota dal server (${res.status}). Controlla configurazione PHP/MySQL.`);
+  }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Risposta non valida dal server (${res.status}): ${text.slice(0, 180)}`);
+  }
   if (!json.success) throw new Error(json.error?.message || 'Errore inatteso');
   return json.data;
 }
@@ -241,6 +250,11 @@ $('#installBtn')?.addEventListener('click', async () => { await state.deferredIn
 (async function init() {
   setupLoginForm();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js');
-  const data = await api('auth/me');
-  if (data.user) boot(data); else $('#loginView').hidden = false;
+  try {
+    const data = await api('auth/me');
+    if (data.user) boot(data); else $('#loginView').hidden = false;
+  } catch (err) {
+    $('#loginView').hidden = false;
+    $('#loginError').textContent = err.message;
+  }
 })();
