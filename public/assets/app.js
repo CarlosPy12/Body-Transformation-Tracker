@@ -130,7 +130,7 @@ async function loadAdmin() {
   }
 }
 
-function setupForms() {
+function setupLoginForm() {
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
@@ -138,6 +138,9 @@ function setupForms() {
       boot(data);
     } catch (err) { $('#loginError').textContent = err.message; }
   });
+}
+
+function setupAppForms() {
   $('#logoutBtn').addEventListener('click', async () => { await api('auth/logout', { method: 'POST', body: '{}' }); location.reload(); });
   $('#injectionForm').addEventListener('submit', submitJson('injections', loadInjections));
   $('#workoutForm').addEventListener('submit', submitJson('workouts', loadCalendar));
@@ -201,7 +204,7 @@ function boot(data) {
   $('#appShell').hidden = false;
   initNav();
   populateControls();
-  setupForms();
+  setupAppForms();
   $('#todayLabel').textContent = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date());
   loadDashboard();
   if (new URLSearchParams(location.search).get('share') === 'csv') loadSharedImport();
@@ -236,6 +239,7 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); stat
 $('#installBtn')?.addEventListener('click', async () => { await state.deferredInstall?.prompt(); $('#installBtn').hidden = true; });
 
 (async function init() {
+  setupLoginForm();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js');
   const data = await api('auth/me');
   if (data.user) boot(data); else $('#loginView').hidden = false;
