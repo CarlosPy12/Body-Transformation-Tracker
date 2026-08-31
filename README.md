@@ -122,6 +122,37 @@ php database/seeds/import_steps_csv.php --user-id=1 --file=/home2/b9g6c7m1/kinet
 
 Lo script aggiorna una sola riga per giorno in `daily_steps`, quindi se rilanci lo stesso import corregge i valori esistenti invece di duplicarli.
 
+## Import storico completo bilancia + MJ
+
+Per importare lo storico principale usa un CSV con le colonne dell'export bilancia piu le colonne finali `Dose MJ` e `MJ Mg`. La colonna `Passi` viene ignorata da questo script.
+
+Header atteso:
+
+```csv
+Data;Ora;kg;IMC;Massa grassa;Acqua;Muscoli;Ossa;Braccio sinistro Massa grassa;Braccio sinistro Muscoli;Braccio destro Massa grassa;Braccio destro Muscoli;Gamba sinistra Massa grassa;Gamba sinistra Muscoli;Gamba destra Massa grassa;Gamba destra Muscoli;Tronco Massa grassa;Tronco Muscoli;Età metabolica;Battito;Grasso viscerale;Passi;Dose MJ;MJ Mg
+```
+
+Regole:
+
+- `Passi` viene saltato.
+- `Dose MJ = 1` importa una iniezione completata nel giorno/ora della riga.
+- `MJ Mg` diventa sia dose pianificata sia dose somministrata.
+- Se `Dose MJ = 0` e `MJ Mg` e vuoto/zero, non viene creata nessuna iniezione.
+- Le misurazioni sono deduplicate con lo stesso hash dell'import bilancia.
+- Le iniezioni identiche per utente, farmaco, data/ora e dose non vengono duplicate.
+
+Prova senza scrivere:
+
+```bash
+php database/seeds/import_history_csv.php --user-id=1 --file=/home2/b9g6c7m1/kinetica-repo/storage/uploads/storico_completo.csv --medication=Mounjaro --dry-run
+```
+
+Import reale:
+
+```bash
+php database/seeds/import_history_csv.php --user-id=1 --file=/home2/b9g6c7m1/kinetica-repo/storage/uploads/storico_completo.csv --medication=Mounjaro
+```
+
 ## Sicurezza
 
 - Nessun secret e nessuna password nel repository.
