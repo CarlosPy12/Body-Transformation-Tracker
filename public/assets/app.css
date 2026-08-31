@@ -13,7 +13,7 @@
   --violet: #a979ff;
   --danger: #ff6b74;
   --radius: 12px;
-  --sidebar-width: 216px;
+  --sidebar-width: 248px;
   --shadow: 0 20px 60px rgba(0, 0, 0, .35);
   --ease: cubic-bezier(.2, .8, .2, 1);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -66,7 +66,7 @@ select option { color: #101418; }
 .nav-button.active { color: var(--teal); border-color: rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.038)); }
 .nav-icon { width: 22px; height: 22px; display: inline-grid; place-items: center; flex: 0 0 22px; }
 .nav-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.nav-label { white-space: nowrap; overflow: hidden; }
+.nav-label { white-space: normal; overflow: hidden; line-height: 1.2; }
 .ghost-button { background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--line); }
 .sidebar > .ghost-button { align-self: end; min-height: 56px; border-radius: 10px; }
 .danger-button { background: rgba(255,107,116,.12); color: #ffd9dc; border: 1px solid rgba(255,107,116,.35); }
@@ -78,7 +78,7 @@ select option { color: #101418; }
 .sidebar-collapsed .sidebar .ghost-button { opacity: 0; width: 0; pointer-events: none; }
 .sidebar-collapsed .nav-button { justify-content: center; padding-inline: .5rem; }
 
-.main-panel { width: min(100% - 4rem, 1088px); padding: 1.65rem 0 6rem; margin: 0 0 0 2.15rem; }
+.main-panel { width: min(100% - 4rem, 1280px); padding: 1.65rem 0 6rem; margin: 0 auto; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.2rem; }
 .topbar h1 { margin: 0 0 .7rem; font-size: 2.05rem; line-height: 1; letter-spacing: 0; }
 .topbar .muted { display: flex; align-items: center; gap: .38rem; font-size: .78rem; color: var(--text); }
@@ -86,11 +86,15 @@ select option { color: #101418; }
 .topbar .muted i { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 2px rgba(34,216,207,.18); }
 .topbar-actions { display: flex; align-items: center; gap: .7rem; }
 .topbar-actions select { width: auto; min-width: 178px; padding: .66rem .82rem; border-radius: 8px; background: rgba(255,255,255,.045); font-size: .86rem; }
+.date-range { display: flex; align-items: end; gap: .55rem; padding: .45rem; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(255,255,255,.035); }
+.date-range label { gap: .25rem; font-size: .68rem; }
+.date-range input { width: 138px; padding: .5rem .58rem; border-radius: 8px; font-size: .8rem; }
 .view { display: none; animation: rise .28s var(--ease); }
 .active-view { display: block; }
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; margin-bottom: .85rem; }
 .metric-grid.compact { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.quick-grid { display: grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: .85rem; align-items: start; }
 .summary-stack { display: grid; gap: .75rem; margin-bottom: .85rem; }
 .dashboard-metric-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
 .card, .panel { border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius); background: linear-gradient(160deg, rgba(255,255,255,.062), rgba(255,255,255,.02)); box-shadow: none; }
@@ -111,6 +115,7 @@ select option { color: #101418; }
 .chart-panel .section-head select { justify-self: end; max-width: 150px; }
 .two-column { display: grid; grid-template-columns: minmax(280px, 410px) 1fr; gap: .85rem; align-items: start; }
 .form-panel { display: grid; gap: .9rem; }
+.split-fields { display: grid; grid-template-columns: 1fr 120px; gap: .75rem; }
 .inline-form { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
 .timeline { display: grid; gap: .65rem; }
 .timeline-item { padding: .75rem; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.035); }
@@ -119,11 +124,18 @@ select option { color: #101418; }
 .segmented button { background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--line); padding: .65rem .85rem; }
 .segmented button.active { background: rgba(34,216,207,.18); color: var(--teal); }
 
+.calendar-head { grid-template-columns: 1fr auto; }
+.calendar-controls { display: flex; align-items: center; gap: .5rem; }
+.calendar-controls input { width: 160px; }
+.icon-button { width: 42px; height: 42px; padding: 0; display: inline-grid; place-items: center; font-size: 1.35rem; }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: -.25rem 0 .85rem; color: var(--muted); font-size: .84rem; }
+.calendar-legend span { display: inline-flex; align-items: center; gap: .4rem; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; }
-.day { min-height: 104px; border: 1px solid var(--line); border-radius: 14px; padding: .55rem; background: rgba(255,255,255,.035); }
+.day { min-height: 112px; border: 1px solid var(--line); border-radius: 12px; padding: .55rem; background: rgba(255,255,255,.035); }
 .day button { width: 100%; height: 100%; padding: 0; background: transparent; color: var(--text); text-align: left; border: 0; display: grid; align-content: start; gap: .45rem; }
 .dots { display: flex; gap: .25rem; flex-wrap: wrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
+.dot.misurazione { background: var(--teal); }
 .dot.iniezione { background: var(--violet); }
 .dot.allenamento { background: var(--lime); }
 
@@ -137,8 +149,9 @@ select option { color: #101418; }
 .row-actions { position: sticky; right: 0; background: #101b20; display: flex; gap: .4rem; }
 .row-actions button { padding: .52rem .62rem; border-radius: 8px; font-size: .78rem; }
 
-.bottom-nav { position: fixed; left: .8rem; right: .8rem; bottom: .8rem; z-index: 5; grid-template-columns: repeat(5, 1fr); padding: .45rem; border: 1px solid var(--line); border-radius: 20px; background: rgba(7,16,17,.88); backdrop-filter: blur(20px); box-shadow: var(--shadow); display: none; }
+.bottom-nav { position: fixed; left: .8rem; right: .8rem; bottom: .8rem; z-index: 5; grid-template-columns: repeat(6, 1fr); padding: .45rem; border: 1px solid var(--line); border-radius: 20px; background: rgba(7,16,17,.88); backdrop-filter: blur(20px); box-shadow: var(--shadow); display: none; }
 .bottom-nav .nav-button { justify-content: center; font-size: .76rem; padding: .55rem .2rem; flex-direction: column; gap: .18rem; }
+.bottom-nav .nav-label { white-space: nowrap; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -148,7 +161,11 @@ select option { color: #101418; }
   .bottom-nav { display: grid; }
   .main-panel { width: auto; padding: 1rem 1rem 6.8rem; margin: 0; }
   .metric-grid, .metric-grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-grid { grid-template-columns: 1fr; }
   .two-column { grid-template-columns: 1fr; }
+  .date-range { width: 100%; }
+  .date-range input { width: 100%; }
+  .topbar-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .filters { display: grid; align-items: stretch; }
   .section-head { display: flex; }
   .calendar-grid { gap: .35rem; }
@@ -160,6 +177,8 @@ select option { color: #101418; }
   .card { min-height: 112px; padding: .85rem; }
   .card .value { font-size: 1.55rem; }
   .topbar { align-items: start; }
+  .split-fields { grid-template-columns: 1fr; }
+  .calendar-controls input { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

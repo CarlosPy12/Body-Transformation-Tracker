@@ -85,7 +85,13 @@ try {
     }
 
     if ($path === 'results') {
-        Response::ok((new ResultsService($pdo))->metric((int) $user['id'], (string) ($_GET['metric'] ?? 'peso'), (string) ($_GET['range'] ?? '3m')));
+        Response::ok((new ResultsService($pdo))->metric(
+            (int) $user['id'],
+            (string) ($_GET['metric'] ?? 'peso'),
+            (string) ($_GET['range'] ?? '3m'),
+            isset($_GET['start']) ? (string) $_GET['start'] : null,
+            isset($_GET['end']) ? (string) $_GET['end'] : null
+        ));
         return;
     }
 
@@ -94,6 +100,22 @@ try {
         $stmt = $pdo->prepare('SELECT * FROM body_measurements WHERE user_id = ? ORDER BY measured_at DESC, id DESC LIMIT ' . $limit);
         $stmt->execute([$user['id']]);
         Response::ok($stmt->fetchAll());
+        return;
+    }
+
+    if ($path === 'measurements' && $method === 'POST') {
+        require_csrf($auth);
+        $fields = measurement_fields();
+        $row = ['measured_at' => normalize_measured_at((string) ($input['measured_at'] ?? date('Y-m-d H:i:s')))];
+        foreach ($fields as $field) {
+            $row[$field] = decimal_or_null($input[$field] ?? null);
+        }
+        $row['measurement_hash'] = MeasurementFingerprint::hash((int) $user['id'], $row);
+        $columns = implode(', ', array_merge(['user_id'], array_keys($row), ['source', 'import_id']));
+        $marks = implode(', ', array_fill(0, count($row) + 3, '?'));
+        $stmt = $pdo->prepare("INSERT IGNORE INTO body_measurements ({$columns}) VALUES ({$marks})");
+        $stmt->execute(array_merge([$user['id']], array_values($row), ['manual', null]));
+        Response::ok(['id' => (int) $pdo->lastInsertId(), 'inserted' => $stmt->rowCount() === 1]);
         return;
     }
 
@@ -218,9 +240,20 @@ try {
 
     if ($path === 'goals' && $method === 'POST') {
         require_csrf($auth);
+        $pdo->prepare('UPDATE goals SET is_active = 0 WHERE user_id = ? AND metric_key = ?')->execute([$user['id'], $input['metric_key'] ?? 'peso']);
         $stmt = $pdo->prepare('INSERT INTO goals(user_id, metric_key, target_value, target_date, is_active) VALUES (?, ?, ?, ?, 1)');
         $stmt->execute([$user['id'], $input['metric_key'] ?? 'peso', $input['target_value'] ?? 0, $input['target_date'] ?? null]);
         Response::ok(['id' => (int) $pdo->lastInsertId()]);
+        return;
+    }
+
+    if ($path === 'steps' && $method === 'POST') {
+        require_csrf($auth);
+        $date = normalize_date((string) ($input['step_date'] ?? date('Y-m-d')));
+        $steps = max(0, (int) ($input['steps'] ?? 0));
+        $stmt = $pdo->prepare('INSERT INTO daily_steps(user_id, step_date, steps, source, source_file_name, synced_at) VALUES (?, ?, ?, "manual", NULL, UTC_TIMESTAMP()) ON DUPLICATE KEY UPDATE steps = VALUES(steps), source = VALUES(source), synced_at = UTC_TIMESTAMP()');
+        $stmt->execute([$user['id'], $date, $steps]);
+        Response::ok(['saved' => true]);
         return;
     }
 
@@ -231,22 +264,41 @@ try {
         return;
     }
 
+    if ($path === 'injections/defaults') {
+        $stmt = $pdo->prepare('SELECT i.planned_dose_mg, m.name AS medication_name FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ? ORDER BY COALESCE(i.administered_at, i.scheduled_at) DESC, i.id DESC LIMIT 1');
+        $stmt->execute([$user['id']]);
+        Response::ok($stmt->fetch() ?: ['medication_name' => 'Mounjaro', 'planned_dose_mg' => 7.5]);
+        return;
+    }
+
     if ($path === 'injections' && $method === 'POST') {
         require_csrf($auth);
-        $med = (int) ($input['medication_id'] ?? 0);
-        if ($med === 0) {
-            $pdo->prepare('INSERT INTO glp1_medications(user_id, name) VALUES (?, ?)')->execute([$user['id'], $input['medication_name'] ?? 'GLP-1']);
-            $med = (int) $pdo->lastInsertId();
+        $med = medication_id($pdo, (int) $user['id'], (string) ($input['medication_name'] ?? 'Mounjaro'));
+        $dose = decimal_or_null($input['planned_dose_mg'] ?? null) ?? 0.0;
+        $status = !empty($input['completed']) ? 'completed' : 'scheduled';
+        $dates = injection_schedule_dates($input);
+        $exists = $pdo->prepare('SELECT id FROM glp1_injections WHERE user_id = ? AND medication_id = ? AND scheduled_at = ? AND planned_dose_mg = ? LIMIT 1');
+        $stmt = $pdo->prepare('INSERT INTO glp1_injections(user_id, medication_id, scheduled_at, administered_at, planned_dose_mg, administered_dose_mg, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        $created = 0;
+        $skipped = 0;
+        foreach ($dates as $scheduledAt) {
+            $exists->execute([$user['id'], $med, $scheduledAt, $dose]);
+            if ($exists->fetchColumn()) {
+                $skipped++;
+                continue;
+            }
+            $administeredAt = $status === 'completed' ? $scheduledAt : null;
+            $administeredDose = $status === 'completed' ? $dose : null;
+            $stmt->execute([$user['id'], $med, $scheduledAt, $administeredAt, $dose, $administeredDose, $status, $input['notes'] ?? null]);
+            $created++;
         }
-        $stmt = $pdo->prepare('INSERT INTO glp1_injections(user_id, medication_id, scheduled_at, planned_dose_mg, status, notes) VALUES (?, ?, ?, ?, "scheduled", ?)');
-        $stmt->execute([$user['id'], $med, $input['scheduled_at'], $input['planned_dose_mg'], $input['notes'] ?? null]);
-        Response::ok(['id' => (int) $pdo->lastInsertId()]);
+        Response::ok(['created' => $created, 'skipped' => $skipped]);
         return;
     }
 
     if (preg_match('#^injections/(\d+)/complete$#', $path, $m) && $method === 'POST') {
         require_csrf($auth);
-        $stmt = $pdo->prepare('UPDATE glp1_injections SET status = "completed", administered_at = ?, administered_dose_mg = ? WHERE id = ? AND user_id = ?');
+        $stmt = $pdo->prepare('UPDATE glp1_injections SET status = "completed", administered_at = ?, administered_dose_mg = COALESCE(?, planned_dose_mg) WHERE id = ? AND user_id = ?');
         $stmt->execute([$input['administered_at'] ?? date('Y-m-d H:i:s'), $input['administered_dose_mg'] ?? null, $m[1], $user['id']]);
         Response::ok(['updated' => $stmt->rowCount()]);
         return;
@@ -333,6 +385,16 @@ function decimal_or_null(mixed $value): ?float
     return (float) str_replace(',', '.', (string) $value);
 }
 
+function normalize_date(string $value): string
+{
+    $value = trim($value);
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+        return $value;
+    }
+    $time = strtotime($value);
+    return $time === false ? date('Y-m-d') : date('Y-m-d', $time);
+}
+
 function normalize_measured_at(string $value): string
 {
     $value = trim($value);
@@ -342,7 +404,53 @@ function normalize_measured_at(string $value): string
     if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $value)) {
         return $value . ':00';
     }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+        return $value . ' 00:00:00';
+    }
     return $value;
+}
+
+function medication_id(PDO $pdo, int $userId, string $name): int
+{
+    $name = trim($name) !== '' ? trim($name) : 'Mounjaro';
+    $stmt = $pdo->prepare('SELECT id FROM glp1_medications WHERE user_id = ? AND name = ? LIMIT 1');
+    $stmt->execute([$userId, $name]);
+    $id = $stmt->fetchColumn();
+    if ($id) {
+        return (int) $id;
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO glp1_medications(user_id, name, active_ingredient, is_active) VALUES (?, ?, "tirzepatide", 1)');
+    $stmt->execute([$userId, $name]);
+    return (int) $pdo->lastInsertId();
+}
+
+/** @return list<string> */
+function injection_schedule_dates(array $input): array
+{
+    $scheduledAt = (string) ($input['scheduled_at'] ?? '');
+    if ($scheduledAt === '') {
+        $date = normalize_date((string) ($input['start_date'] ?? date('Y-m-d')));
+        $time = trim((string) ($input['start_time'] ?? '10:00'));
+        $scheduledAt = $date . ' ' . ($time !== '' ? $time : '10:00');
+    }
+    $scheduledAt = normalize_measured_at(str_replace('T', ' ', $scheduledAt));
+    $start = new DateTimeImmutable($scheduledAt);
+
+    $untilRaw = trim((string) ($input['recurrence_until'] ?? ''));
+    if ($untilRaw === '') {
+        return [$start->format('Y-m-d H:i:s')];
+    }
+
+    $until = new DateTimeImmutable(normalize_date($untilRaw) . ' 23:59:59');
+    $dates = [];
+    $cursor = $start;
+    while ($cursor <= $until && count($dates) < 80) {
+        $dates[] = $cursor->format('Y-m-d H:i:s');
+        $cursor = $cursor->modify('+1 week');
+    }
+
+    return $dates ?: [$start->format('Y-m-d H:i:s')];
 }
 
 function dashboard_metric_summary(PDO $pdo, int $userId): array

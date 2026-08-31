@@ -57,13 +57,56 @@ use App\Support\Env;
           <p id="todayLabel" class="muted"></p>
         </div>
         <div class="topbar-actions">
-          <select id="topPeriodShell" aria-label="Periodo riepilogo">
-            <option>24 Feb - 19 Mag 2025</option>
-            <option>Ultimi 3 mesi</option>
-          </select>
+          <div class="date-range" aria-label="Periodo dati">
+            <label>Da <input id="rangeStart" type="date"></label>
+            <label>A <input id="rangeEnd" type="date"></label>
+          </div>
           <button id="installBtn" class="ghost-button" hidden>Installa PWA</button>
         </div>
       </header>
+
+      <section id="aggiungi" class="view">
+        <div class="quick-grid">
+          <form id="quickMeasurementForm" class="panel form-panel">
+            <h2>Misurazione corporea</h2>
+            <label>Data e ora <input name="measured_at" type="datetime-local" required></label>
+            <label>Peso (kg) <input name="weight_kg" type="number" step="0.1" required></label>
+            <label>BMI <input name="bmi" type="number" step="0.1"></label>
+            <label>Massa grassa (%) <input name="body_fat" type="number" step="0.1"></label>
+            <label>Acqua (%) <input name="body_water" type="number" step="0.1"></label>
+            <label>Muscoli (%) <input name="muscle" type="number" step="0.1"></label>
+            <button type="submit">Salva misurazione</button>
+          </form>
+          <form id="quickStepsForm" class="panel form-panel">
+            <h2>Passi</h2>
+            <label>Data <input name="step_date" type="date" required></label>
+            <label>Passi <input name="steps" type="number" min="0" step="1" required></label>
+            <button type="submit">Salva passi</button>
+          </form>
+          <form id="quickInjectionForm" class="panel form-panel">
+            <h2>Iniezione effettuata</h2>
+            <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
+            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
+            <label>Dose (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
+            <input name="completed" type="hidden" value="1">
+            <button type="submit">Registra iniezione</button>
+          </form>
+          <form id="quickWorkoutForm" class="panel form-panel">
+            <h2>Allenamento</h2>
+            <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
+            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
+            <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+            <button type="submit">Salva allenamento</button>
+          </form>
+          <form id="quickGoalForm" class="panel form-panel">
+            <h2>Target</h2>
+            <label>Metrica <select name="metric_key"></select></label>
+            <label>Target <input name="target_value" type="number" step="0.1" required></label>
+            <label>Data target <input name="target_date" type="date"></label>
+            <button type="submit">Aggiorna target</button>
+          </form>
+        </div>
+      </section>
 
       <section id="riepilogo" class="view active-view" aria-labelledby="pageTitle">
         <div class="summary-stack" id="dashboardCards"></div>
@@ -86,11 +129,15 @@ use App\Support\Env;
         <div class="two-column">
           <form id="injectionForm" class="panel form-panel">
             <h2>Programma iniezione</h2>
-            <label>Farmaco <input name="medication_name" value="GLP-1"></label>
-            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
+            <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
+            <div class="split-fields">
+              <label>Data partenza <input name="start_date" type="date" required></label>
+              <label>Ora <input name="start_time" type="time" required></label>
+            </div>
+            <label>Ricorrenza settimanale fino a <input name="recurrence_until" type="date"></label>
             <label>Dose prevista (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
             <label>Note <textarea name="notes" rows="3"></textarea></label>
-            <button type="submit">Programma iniezione</button>
+            <button type="submit">Programma calendario</button>
           </form>
           <div class="panel">
             <h2>Storico</h2>
@@ -133,9 +180,18 @@ use App\Support\Env;
       </section>
 
       <section id="calendario" class="view">
-        <div class="section-head">
+        <div class="section-head calendar-head">
           <h2 id="calendarTitle">Calendario</h2>
-          <input id="monthPicker" type="month" aria-label="Mese calendario">
+          <div class="calendar-controls">
+            <button id="prevMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese precedente">‹</button>
+            <input id="monthPicker" type="month" aria-label="Mese calendario">
+            <button id="nextMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese successivo">›</button>
+          </div>
+        </div>
+        <div class="calendar-legend">
+          <span><i class="dot misurazione"></i> Misurazione</span>
+          <span><i class="dot iniezione"></i> Iniezione</span>
+          <span><i class="dot allenamento"></i> Allenamento</span>
         </div>
         <div id="calendarGrid" class="calendar-grid"></div>
         <div id="dayEvents" class="panel"></div>

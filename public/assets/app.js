@@ -1,5 +1,6 @@
-const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', metric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
+const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', rangeStart: '', rangeEnd: '', metric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
 const sections = [
+  ['aggiungi', 'Aggiungi nuovo inserimento', 'plus', 'Aggiungi'],
   ['riepilogo', 'Riepilogo', 'home'],
   ['iniezioni', 'Iniezioni', 'syringe'],
   ['risultati', 'Risultati', 'chart'],
@@ -75,10 +76,13 @@ async function api(path, options = {}) {
 }
 
 function initNav() {
-  const markup = sections.map(([id, label, icon]) => `<button class="nav-button ${id === state.active ? 'active' : ''}" data-view="${id}" aria-label="${label}"><span class="nav-icon">${iconSvg(icon)}</span><span class="nav-label">${label}</span></button>`).join('');
-  $('#sideNav').innerHTML = markup;
-  $('#bottomNav').innerHTML = markup;
+  $('#sideNav').innerHTML = sections.map(([id, label, icon]) => navButton(id, label, icon)).join('');
+  $('#bottomNav').innerHTML = sections.map(([id, label, icon, shortLabel]) => navButton(id, shortLabel || label, icon, label)).join('');
   document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
+}
+
+function navButton(id, label, icon, ariaLabel = label) {
+  return `<button class="nav-button ${id === state.active ? 'active' : ''}" data-view="${id}" aria-label="${ariaLabel}"><span class="nav-icon">${iconSvg(icon)}</span><span class="nav-label">${label}</span></button>`;
 }
 
 function showView(id) {
@@ -86,6 +90,7 @@ function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active-view', v.id === id));
   document.querySelectorAll('.nav-button').forEach(b => b.classList.toggle('active', b.dataset.view === id));
   $('#pageTitle').textContent = sections.find(s => s[0] === id)?.[1] || 'Riepilogo';
+  if (id === 'aggiungi') loadEntryDefaults();
   if (id === 'risultati') loadResults();
   if (id === 'iniezioni') loadInjections();
   if (id === 'calendario') loadCalendar();
@@ -115,7 +120,7 @@ async function loadDashboard() {
     card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)', 'dumbbell'),
     '</div>'
   ].join('');
-  drawMetricChart('overviewChart', await api('results&metric=peso&range=3m'), 'Peso');
+  drawMetricChart('overviewChart', await api(`results&metric=peso&range=${state.range}${rangeQuery()}`), 'Peso');
 }
 
 function metricRow(title, metric, data = {}, accent = 'var(--teal)') {
@@ -132,9 +137,9 @@ function metricRow(title, metric, data = {}, accent = 'var(--teal)') {
 }
 
 async function loadResults() {
-  const data = await api(`results&metric=${state.metric}&range=${state.range}`);
+  const data = await api(`results&metric=${state.metric}&range=${state.range}${rangeQuery()}`);
   $('#resultChartTitle').textContent = metrics[state.metric];
-  $('#resultKpis').innerHTML = Object.entries(data.kpi || {}).map(([key, value]) => card(labelize(key), formatKpi(key, value, state.metric))).join('');
+  $('#resultKpis').innerHTML = Object.entries(data.kpi || {}).map(([key, value]) => card(labelize(key, state.metric), formatKpi(key, value, state.metric), '', 'var(--teal)', kpiIcon(key))).join('');
   drawMetricChart('resultChart', data, metrics[state.metric]);
 }
 
@@ -158,14 +163,16 @@ async function loadInjections() {
   const rows = await api('injections');
   $('#injectionList').innerHTML = rows.map(r => `<div class="timeline-item"><strong>${r.medication_name}</strong><br>${fmt.format(r.planned_dose_mg)} mg · ${dateTime(r.scheduled_at)}<br><span class="muted">${statusIt(r.status)}</span> ${r.status === 'scheduled' ? `<button data-complete="${r.id}">Segna come effettuata</button>` : ''}</div>`).join('') || '<p class="muted">Nessuna iniezione registrata.</p>';
   document.querySelectorAll('[data-complete]').forEach(btn => btn.addEventListener('click', async () => {
-    await api(`injections/${btn.dataset.complete}/complete`, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' '), administered_dose_mg: null }) });
+    await api(`injections/${btn.dataset.complete}/complete`, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
     loadInjections();
+    loadDashboard();
   }));
 }
 
 async function loadCalendar() {
   const month = $('#monthPicker').value || new Date().toISOString().slice(0, 7);
   $('#monthPicker').value = month;
+  $('#calendarTitle').textContent = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`));
   const rows = await api(`calendar&month=${month}`);
   const byDay = rows.reduce((acc, row) => ((acc[row.event_date] ||= []).push(row), acc), {});
   const first = new Date(`${month}-01T00:00:00`);
@@ -203,9 +210,14 @@ function setupLoginForm() {
 function setupAppForms() {
   $('#sidebarToggle').addEventListener('click', toggleSidebar);
   $('#logoutBtn').addEventListener('click', async () => { await api('auth/logout', { method: 'POST', body: '{}' }); location.reload(); });
-  $('#injectionForm').addEventListener('submit', submitJson('injections', loadInjections));
+  $('#injectionForm').addEventListener('submit', submitJson('injections', afterInjectionsSaved));
   $('#workoutForm').addEventListener('submit', submitJson('workouts', loadCalendar));
-  $('#goalForm').addEventListener('submit', submitJson('goals', () => alert('Obiettivo salvato.')));
+  $('#goalForm').addEventListener('submit', submitJson('goals', afterGoalSaved));
+  $('#quickMeasurementForm').addEventListener('submit', submitJson('measurements', afterQuickSave));
+  $('#quickStepsForm').addEventListener('submit', submitJson('steps', afterQuickSave));
+  $('#quickInjectionForm').addEventListener('submit', submitJson('injections', afterInjectionsSaved));
+  $('#quickWorkoutForm').addEventListener('submit', submitJson('workouts', afterQuickSave));
+  $('#quickGoalForm').addEventListener('submit', submitJson('goals', afterGoalSaved));
   $('#importForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
@@ -223,7 +235,15 @@ function setupAppForms() {
   $('#pushBtn').addEventListener('click', subscribePush);
   $('#loadMeasurementsBtn').addEventListener('click', loadMeasurementsTable);
   $('#monthPicker').addEventListener('change', loadCalendar);
-  $('#dashboardRange').addEventListener('change', loadDashboard);
+  $('#prevMonthBtn').addEventListener('click', () => shiftCalendarMonth(-1));
+  $('#nextMonthBtn').addEventListener('click', () => shiftCalendarMonth(1));
+  $('#dashboardRange').addEventListener('change', e => {
+    state.range = e.target.value;
+    applyPresetRange(state.range);
+    loadDashboard();
+  });
+  $('#rangeStart').addEventListener('change', updateDateRange);
+  $('#rangeEnd').addEventListener('change', updateDateRange);
 }
 
 function toggleSidebar() {
@@ -238,10 +258,34 @@ function submitJson(path, after) {
   return async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
-    await api(path, { method: 'POST', body: JSON.stringify(body) });
+    const result = await api(path, { method: 'POST', body: JSON.stringify(body) });
     e.target.reset();
-    after();
+    after(result, e.target);
   };
+}
+
+function afterQuickSave() {
+  hydrateDefaultDates();
+  loadDashboard();
+  if (state.active === 'risultati') loadResults();
+  if (state.active === 'calendario') loadCalendar();
+  alert('Inserimento salvato.');
+}
+
+function afterGoalSaved() {
+  hydrateDefaultDates();
+  loadDashboard();
+  loadResults();
+  alert('Target aggiornato.');
+}
+
+function afterInjectionsSaved(result) {
+  hydrateDefaultDates();
+  loadEntryDefaults();
+  loadInjections();
+  loadDashboard();
+  if (state.active === 'calendario') loadCalendar();
+  alert(`${result.created ?? 1} iniezioni programmate. ${result.skipped ? `${result.skipped} già presenti.` : ''}`.trim());
 }
 
 async function subscribePush() {
@@ -258,14 +302,69 @@ function populateControls() {
   const metricOptions = Object.entries(metrics).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   $('#metricSelect').innerHTML = metricOptions;
   $('#goalForm select[name="metric_key"]').innerHTML = $('#metricSelect').innerHTML;
+  $('#quickGoalForm select[name="metric_key"]').innerHTML = metricOptions;
   $('#metricSelect').addEventListener('change', e => { state.metric = e.target.value; loadResults(); });
   const ranges = [['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
   $('#rangeTabs').innerHTML = ranges.map(([k, v]) => `<button data-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
   document.querySelectorAll('[data-range]').forEach(btn => btn.addEventListener('click', () => {
     state.range = btn.dataset.range;
+    applyPresetRange(state.range);
     document.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', b === btn));
     loadResults();
   }));
+}
+
+function hydrateDefaultDates() {
+  const now = new Date();
+  const today = isoDate(now);
+  const time = now.toTimeString().slice(0, 5);
+  document.querySelectorAll('input[type="date"]').forEach(input => { if (!input.value && input.id !== 'rangeStart' && input.id !== 'rangeEnd') input.value = today; });
+  document.querySelectorAll('input[type="time"]').forEach(input => { if (!input.value) input.value = time; });
+  document.querySelectorAll('input[type="datetime-local"]').forEach(input => { if (!input.value) input.value = `${today}T${time}`; });
+  if (!$('#monthPicker').value) $('#monthPicker').value = today.slice(0, 7);
+  if (!state.rangeStart || !state.rangeEnd) applyPresetRange(state.range);
+}
+
+async function loadEntryDefaults() {
+  hydrateDefaultDates();
+  try {
+    const defaults = await api('injections/defaults');
+    document.querySelectorAll('input[name="medication_name"]').forEach(input => { if (!input.value || input.value === 'GLP-1') input.value = defaults.medication_name || 'Mounjaro'; });
+    document.querySelectorAll('input[name="planned_dose_mg"]').forEach(input => { if (!input.value) input.value = defaults.planned_dose_mg || 7.5; });
+  } catch {}
+}
+
+function updateDateRange() {
+  state.rangeStart = $('#rangeStart').value;
+  state.rangeEnd = $('#rangeEnd').value;
+  loadDashboard();
+  if (state.active === 'risultati') loadResults();
+}
+
+function applyPresetRange(range) {
+  const end = new Date();
+  const start = new Date(end);
+  if (range === '1m') start.setMonth(start.getMonth() - 1);
+  if (range === '3m') start.setMonth(start.getMonth() - 3);
+  if (range === '6m') start.setMonth(start.getMonth() - 6);
+  if (range === '1y') start.setFullYear(start.getFullYear() - 1);
+  if (range === 'all') start.setFullYear(2020, 0, 1);
+  state.rangeStart = isoDate(start);
+  state.rangeEnd = isoDate(end);
+  $('#rangeStart').value = state.rangeStart;
+  $('#rangeEnd').value = state.rangeEnd;
+}
+
+function rangeQuery() {
+  return state.rangeStart && state.rangeEnd ? `&start=${state.rangeStart}&end=${state.rangeEnd}` : '';
+}
+
+function shiftCalendarMonth(delta) {
+  const current = $('#monthPicker').value || new Date().toISOString().slice(0, 7);
+  const date = new Date(`${current}-01T00:00:00`);
+  date.setMonth(date.getMonth() + delta);
+  $('#monthPicker').value = isoDate(date).slice(0, 7);
+  loadCalendar();
 }
 
 async function loadMeasurementsTable() {
@@ -315,6 +414,8 @@ function boot(data) {
   initNav();
   populateControls();
   setupAppForms();
+  hydrateDefaultDates();
+  loadEntryDefaults();
   $('#todayLabel').innerHTML = `Panoramica <span>Aggiornato oggi, ${new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(new Date())}</span> <i aria-hidden="true"></i>`;
   loadDashboard();
   if (new URLSearchParams(location.search).get('share') === 'csv') loadSharedImport();
@@ -339,13 +440,14 @@ async function loadSharedImport() {
 function dateTime(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T'))) : ''; }
 function shortDate(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' }).format(new Date(value.replace(' ', 'T'))) : ''; }
 function dateIt(value) { return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`)); }
-function labelize(key) {
+function labelize(key, metric = state.metric) {
   return ({
     valore_corrente: 'Valore corrente',
     valore_iniziale: 'Valore iniziale',
     variazione_totale: 'Variazione totale',
     variazione_percentuale: 'Variazione percentuale',
-    media_periodo: 'Media nel periodo',
+    media_settimanale: metric === 'peso' ? 'Media kg persi / settimana' : 'Media settimanale',
+    delta_target: 'Delta da target',
     media_giornaliera: 'Media giornaliera',
     totale_periodo: 'Totale periodo',
     giorni_sopra_obiettivo: 'Giorni sopra obiettivo',
@@ -379,13 +481,24 @@ function metricIcon(metric) {
   if (metric === 'massa_grassa') return 'fat';
   return 'target';
 }
+function kpiIcon(key) {
+  if (key.includes('target')) return 'target';
+  if (key.includes('settimanale')) return 'chart';
+  if (key.includes('iniziale')) return 'calendar';
+  if (key.includes('minimo') || key.includes('massimo')) return 'chart';
+  return 'weight';
+}
 function inputValue(value, type) {
   if (value === null || value === undefined) return '';
   if (type === 'datetime-local') return String(value).slice(0, 16).replace(' ', 'T');
   return value;
 }
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 function iconSvg(name) {
   const icons = {
+    plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>',
     home: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg>',
     syringe: '<svg viewBox="0 0 24 24"><path d="m18 2 4 4"></path><path d="m17 7 2-2"></path><path d="M4 20l7-7"></path><path d="m9 11 4 4 6-6-4-4-6 6Z"></path><path d="m5 19 3 3"></path></svg>',
     chart: '<svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h17"></path><path d="M8 16v-5"></path><path d="M13 16V8"></path><path d="M18 16v-9"></path></svg>',
