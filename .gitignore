@@ -4,5 +4,6 @@
 /storage/uploads/*
 !/storage/uploads/.gitkeep
 /storage/google-service-account.json
+/database/seeds/*_import.sql
 .DS_Store
 Thumbs.db
