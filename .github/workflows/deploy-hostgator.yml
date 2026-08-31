@@ -1,0 +1,62 @@
+name: Deploy HostGator
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: hostgator-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Pull latest code on HostGator
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.HOSTGATOR_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.HOSTGATOR_SSH_HOST }}
+          SSH_PORT: ${{ secrets.HOSTGATOR_SSH_PORT || '22' }}
+          SSH_KNOWN_HOSTS: ${{ secrets.HOSTGATOR_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/hostgator_deploy_key
+          chmod 600 ~/.ssh/hostgator_deploy_key
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" > ~/.ssh/known_hosts
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SSH_USER: ${{ secrets.HOSTGATOR_SSH_USER }}
+          SSH_HOST: ${{ secrets.HOSTGATOR_SSH_HOST }}
+          SSH_PORT: ${{ secrets.HOSTGATOR_SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.HOSTGATOR_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/hostgator_deploy_key -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+            set -euo pipefail
+            cd "$DEPLOY_PATH"
+            git fetch origin main
+            git reset --hard origin/main
+            if command -v composer >/dev/null 2>&1; then
+              composer install --no-dev --optimize-autoloader --no-interaction
+            elif [ ! -f vendor/autoload.php ]; then
+              echo "Composer non trovato e vendor/autoload.php assente. Carica vendor/ manualmente o installa Composer sul server." >&2
+              exit 1
+            fi
+            if command -v php >/dev/null 2>&1; then
+              php -l public/index.php
+              php -l public/api/index.php
+            fi
+          REMOTE

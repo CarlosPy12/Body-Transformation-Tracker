@@ -50,6 +50,31 @@ php tests/run.php
 
 I test coprono parser bilancia, decimali italiani, NULL, deduplica, parser passi, esclusione aggregati, authorization e transizione GLP-1.
 
+## Deploy Automatico HostGator
+
+La workflow `.github/workflows/deploy-hostgator.yml` aggiorna HostGator a ogni push su `main` entrando via SSH e facendo pull della repo clonata.
+
+Configura questi GitHub Secrets in `Settings -> Secrets and variables -> Actions`:
+
+```text
+HOSTGATOR_SSH_HOST=hostname SSH HostGator
+HOSTGATOR_SSH_PORT=22
+HOSTGATOR_SSH_USER=utente cPanel/SSH
+HOSTGATOR_SSH_PRIVATE_KEY=chiave privata SSH autorizzata su HostGator
+HOSTGATOR_DEPLOY_PATH=/home2/b9g6c7m1/kinetica-repo
+HOSTGATOR_SSH_KNOWN_HOSTS=opzionale, output di ssh-keyscan
+```
+
+La workflow esegue:
+
+```bash
+git fetch origin main
+git reset --hard origin/main
+composer install --no-dev --optimize-autoloader --no-interaction
+```
+
+Se Composer non e disponibile sul server, la workflow accetta `vendor/autoload.php` gia presente e continua. In quel caso aggiorna manualmente `vendor/` quando cambiano le dipendenze.
+
 ## Import CSV bilancia
 
 Il parser cerca l'header `Data;Ora;kg;IMC;...` anche se non si trova nella prima riga. I decimali italiani vengono convertiti per MySQL, i campi vuoti restano `NULL`, e la deduplica usa `UNIQUE(user_id, measurement_hash)`.
