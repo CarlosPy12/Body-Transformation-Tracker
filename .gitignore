@@ -5,5 +5,7 @@
 !/storage/uploads/.gitkeep
 /storage/google-service-account.json
 /database/seeds/*_import.sql
+/database/maintenance/rebuild_body_measurements_from_export.sql
+/database/maintenance/rebuild_body_measurements_preview.csv
 .DS_Store
 Thumbs.db
