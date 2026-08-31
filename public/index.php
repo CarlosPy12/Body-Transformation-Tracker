@@ -36,7 +36,7 @@ use App\Support\Env;
 
   <div id="appShell" class="app-shell" hidden>
     <aside class="sidebar" aria-label="Navigazione principale">
-      <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Comprimi menu" aria-expanded="true">‹</button>
+      <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Comprimi menu" aria-expanded="true"></button>
       <div class="brand-row">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 48 48" focusable="false">
@@ -74,7 +74,7 @@ use App\Support\Env;
           </button>
           <button class="entry-card panel" type="button" data-dialog="quickWorkoutDialog">
             <strong>Allenamento</strong>
-            <span>Salva una sessione fatta o pianificata.</span>
+            <span>Programma o registra una sessione effettuata.</span>
           </button>
           <button class="entry-card panel" type="button" data-dialog="quickGoalDialog">
             <strong>Target</strong>
@@ -113,6 +113,7 @@ use App\Support\Env;
             <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+            <label class="check-row"><input name="completed" type="checkbox" value="1" checked> Segna anche come effettuato</label>
             <button type="submit">Salva allenamento</button>
           </form>
         </dialog>
@@ -236,9 +237,9 @@ use App\Support\Env;
         <div class="calendar-head">
           <h2 id="calendarTitle">Calendario</h2>
           <div class="calendar-controls">
-            <button id="prevMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese precedente">‹</button>
+            <button id="prevMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese precedente"></button>
             <input id="monthPicker" type="month" aria-label="Mese calendario">
-            <button id="nextMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese successivo">›</button>
+            <button id="nextMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese successivo"></button>
           </div>
         </div>
         <div id="calendarLegend" class="calendar-legend"></div>
@@ -261,6 +262,7 @@ use App\Support\Env;
             <datalist id="workoutTypes"><option>Forza</option><option>Cardio</option><option>Corsa</option><option>Camminata</option><option>Mobilità</option><option>Altro</option></datalist>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+            <label class="check-row"><input name="completed" type="checkbox" value="1"> Segna come effettuato</label>
             <button type="submit">Pianifica</button>
           </form>
         </div>

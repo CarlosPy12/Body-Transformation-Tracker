@@ -1,6 +1,6 @@
 const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', rangeStart: '', rangeEnd: '', metric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
 const sections = [
-  ['aggiungi', 'Aggiungi nuovo inserimento', 'plus', 'Aggiungi'],
+  ['aggiungi', 'Aggiungi attività', 'plus', 'Aggiungi'],
   ['riepilogo', 'Riepilogo', 'home'],
   ['iniezioni', 'Iniezioni', 'syringe'],
   ['risultati', 'Risultati', 'chart'],
@@ -83,6 +83,9 @@ async function api(path, options = {}) {
 function initNav() {
   $('#sideNav').innerHTML = sections.map(([id, label, icon]) => navButton(id, label, icon)).join('');
   $('#bottomNav').innerHTML = sections.map(([id, label, icon, shortLabel]) => navButton(id, shortLabel || label, icon, label)).join('');
+  $('#sidebarToggle').innerHTML = iconSvg('chevronLeft');
+  $('#prevMonthBtn').innerHTML = iconSvg('chevronLeft');
+  $('#nextMonthBtn').innerHTML = iconSvg('chevronRight');
   document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
 }
 
@@ -235,8 +238,17 @@ async function loadCalendar() {
   }).join('');
   document.querySelectorAll('[data-day]').forEach(btn => btn.addEventListener('click', () => {
     const events = byDay[btn.dataset.day] || [];
-    $('#dayEvents').innerHTML = `<h2>${dateIt(btn.dataset.day)}</h2>` + (events.map(e => `<p class="day-event">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span></p>`).join('') || '<p class="muted">Nessun evento.</p>');
+    renderDayDetails(btn.dataset.day, events);
   }));
+}
+
+function renderDayDetails(day, events) {
+  $('#dayEvents').innerHTML = `<div class="section-head day-head"><h2>${dateIt(day)}</h2><div class="day-actions">
+    <button type="button" class="ghost-button" data-day-dialog="quickMeasurementDialog" data-day="${day}">${eventIcon('misurazione', 'Misurazione')} Misurazione</button>
+    <button type="button" class="ghost-button" data-day-dialog="quickInjectionDialog" data-day="${day}">${eventIcon('iniezione', 'Iniezione')} Iniezione</button>
+    <button type="button" class="ghost-button" data-day-dialog="quickWorkoutDialog" data-day="${day}">${eventIcon('allenamento', 'Allenamento')} Allenamento</button>
+  </div></div>` + (events.map(e => `<p class="day-event">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span></p>`).join('') || '<p class="muted">Nessun evento.</p>');
+  document.querySelectorAll('[data-day-dialog]').forEach(btn => btn.addEventListener('click', () => openDayDialog(btn.dataset.dayDialog, btn.dataset.day)));
 }
 
 async function loadAdmin() {
@@ -304,9 +316,23 @@ function setupAppForms() {
 function toggleSidebar() {
   state.sidebarCollapsed = !state.sidebarCollapsed;
   document.body.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
-  $('#sidebarToggle').textContent = state.sidebarCollapsed ? '›' : '‹';
+  $('#sidebarToggle').innerHTML = iconSvg(state.sidebarCollapsed ? 'chevronRight' : 'chevronLeft');
   $('#sidebarToggle').setAttribute('aria-label', state.sidebarCollapsed ? 'Espandi menu' : 'Comprimi menu');
   $('#sidebarToggle').setAttribute('aria-expanded', String(!state.sidebarCollapsed));
+}
+
+function openDayDialog(dialogId, day) {
+  loadEntryDefaults();
+  const dialog = document.getElementById(dialogId);
+  if (!dialog) return;
+  const dateTime = `${day}T${new Date().toTimeString().slice(0, 5)}`;
+  dialog.querySelector('input[name="measured_at"]')?.setAttribute('value', dateTime);
+  dialog.querySelector('input[name="scheduled_at"]')?.setAttribute('value', dateTime);
+  dialog.querySelector('input[name="step_date"]')?.setAttribute('value', day);
+  dialog.querySelector('input[name="measured_at"]') && (dialog.querySelector('input[name="measured_at"]').value = dateTime);
+  dialog.querySelector('input[name="scheduled_at"]') && (dialog.querySelector('input[name="scheduled_at"]').value = dateTime);
+  dialog.querySelector('input[name="step_date"]') && (dialog.querySelector('input[name="step_date"]').value = day);
+  dialog.showModal();
 }
 
 function submitJson(path, after) {
@@ -634,9 +660,11 @@ function iconSvg(name) {
     syringe: '<svg viewBox="0 0 24 24"><path d="m18 2 4 4"></path><path d="m17 7 2-2"></path><path d="M4 20l7-7"></path><path d="m9 11 4 4 6-6-4-4-6 6Z"></path><path d="m5 19 3 3"></path></svg>',
     chart: '<svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h17"></path><path d="M8 16v-5"></path><path d="M13 16V8"></path><path d="M18 16v-9"></path></svg>',
     calendar: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path></svg>',
+    chevronLeft: '<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>',
+    chevronRight: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg>',
     settings: '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .4 1.7 1.7 0 0 0-.5 1.4H9a1.7 1.7 0 0 0-.5-1.4 1.7 1.7 0 0 0-2-.4l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.2-1.1V10a1.7 1.7 0 0 0 1.2-1.1A1.7 1.7 0 0 0 4.4 7l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2-.4A1.7 1.7 0 0 0 9 1.8h6a1.7 1.7 0 0 0 .5 1.4 1.7 1.7 0 0 0 2 .4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 20.5 10v3.9a1.7 1.7 0 0 0-1.1 1.1Z"></path></svg>',
     weight: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="3"></rect><path d="M9 8.5a4 4 0 0 1 6 0"></path><path d="M12 8.5V11"></path></svg>',
-    scale: '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="3"></rect><path d="M9 9a4.4 4.4 0 0 1 6 0"></path><path d="m12 9 1.5 2"></path><path d="M9 15h6"></path></svg>',
+    scale: '<svg viewBox="0 0 24 24"><path d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"></path><path d="M8.7 9.2a5 5 0 0 1 6.6 0"></path><path d="m12 9 1.2 2.2"></path></svg>',
     bmi: '<svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M7 8h10"></path><path d="M6 15h12"></path><path d="M9 3h6"></path><path d="M8 21h8"></path></svg>',
     fat: '<svg viewBox="0 0 24 24"><path d="M12 3c3 3.2 6 6.8 6 10.5a6 6 0 0 1-12 0C6 9.8 9 6.2 12 3Z"></path><path d="M9.5 13.5h5"></path><path d="M12 11v5"></path></svg>',
     target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path></svg>',

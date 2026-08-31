@@ -332,8 +332,12 @@ try {
 
     if ($path === 'workouts' && $method === 'POST') {
         require_csrf($auth);
-        $stmt = $pdo->prepare('INSERT INTO workout_sessions(user_id, scheduled_at, workout_type, duration_minutes, status, notes) VALUES (?, ?, ?, ?, "scheduled", ?)');
-        $stmt->execute([$user['id'], $input['scheduled_at'], $input['workout_type'], $input['duration_minutes'] ?? null, $input['notes'] ?? null]);
+        $scheduledAt = (string) ($input['scheduled_at'] ?? date('Y-m-d H:i:s'));
+        $completed = !empty($input['completed']);
+        $status = $completed ? 'completed' : 'scheduled';
+        $completedAt = $completed ? $scheduledAt : null;
+        $stmt = $pdo->prepare('INSERT INTO workout_sessions(user_id, scheduled_at, completed_at, workout_type, duration_minutes, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$user['id'], $scheduledAt, $completedAt, $input['workout_type'], $input['duration_minutes'] ?? null, $status, $input['notes'] ?? null]);
         Response::ok(['id' => (int) $pdo->lastInsertId()]);
         return;
     }
