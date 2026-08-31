@@ -53,14 +53,20 @@ use App\Support\Env;
     <main id="main" class="main-panel">
       <header class="topbar">
         <div>
-          <p id="todayLabel" class="muted"></p>
           <h1 id="pageTitle">Riepilogo</h1>
+          <p id="todayLabel" class="muted"></p>
         </div>
-        <button id="installBtn" class="ghost-button" hidden>Installa PWA</button>
+        <div class="topbar-actions">
+          <select id="topPeriodShell" aria-label="Periodo riepilogo">
+            <option>24 Feb - 19 Mag 2025</option>
+            <option>Ultimi 3 mesi</option>
+          </select>
+          <button id="installBtn" class="ghost-button" hidden>Installa PWA</button>
+        </div>
       </header>
 
       <section id="riepilogo" class="view active-view" aria-labelledby="pageTitle">
-        <div class="metric-grid" id="dashboardCards"></div>
+        <div class="summary-stack" id="dashboardCards"></div>
         <section class="panel wide">
           <div class="section-head">
             <h2>Andamento peso</h2>

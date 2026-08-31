@@ -7,8 +7,8 @@ const sections = [
   ['impostazioni', 'Impostazioni', 'settings']
 ];
 const metrics = {
-  peso: 'Peso', bmi: 'BMI', massa_grassa: 'Massa grassa', acqua: 'Acqua', muscoli: 'Muscoli', ossa: 'Ossa',
-  grasso_viscerale: 'Grasso viscerale', eta_metabolica: 'Età metabolica', battito: 'Battito',
+  peso: 'Peso', bmi: 'BMI', massa_grassa: 'Massa grassa', acqua: 'Acqua', muscoli: 'Muscoli',
+  eta_metabolica: 'Età metabolica',
   braccio_sx_massa_grassa: 'Braccio SX - massa grassa', braccio_sx_muscoli: 'Braccio SX - muscoli',
   braccio_dx_massa_grassa: 'Braccio DX - massa grassa', braccio_dx_muscoli: 'Braccio DX - muscoli',
   gamba_sx_massa_grassa: 'Gamba SX - massa grassa', gamba_sx_muscoli: 'Gamba SX - muscoli',
@@ -16,9 +16,14 @@ const metrics = {
   tronco_massa_grassa: 'Tronco - massa grassa', tronco_muscoli: 'Tronco - muscoli', passi: 'Passi'
 };
 const metricUnits = {
-  peso: 'kg', bmi: '', massa_grassa: '%', acqua: '%', muscoli: '', ossa: '', grasso_viscerale: '',
-  eta_metabolica: 'anni', battito: 'bpm', braccio_sx_massa_grassa: '%', braccio_dx_massa_grassa: '%',
-  gamba_sx_massa_grassa: '%', gamba_dx_massa_grassa: '%', tronco_massa_grassa: '%', passi: 'passi'
+  peso: 'kg', bmi: '', massa_grassa: '%', acqua: '%', muscoli: '%',
+  eta_metabolica: 'anni',
+  braccio_sx_massa_grassa: '%', braccio_sx_muscoli: '%',
+  braccio_dx_massa_grassa: '%', braccio_dx_muscoli: '%',
+  gamba_sx_massa_grassa: '%', gamba_sx_muscoli: '%',
+  gamba_dx_massa_grassa: '%', gamba_dx_muscoli: '%',
+  tronco_massa_grassa: '%', tronco_muscoli: '%',
+  passi: 'passi'
 };
 const measurementColumns = [
   ['measured_at', 'Data e ora', 'datetime-local'],
@@ -26,21 +31,21 @@ const measurementColumns = [
   ['bmi', 'BMI', 'number'],
   ['body_fat', 'Massa grassa (%)', 'number'],
   ['body_water', 'Acqua (%)', 'number'],
-  ['muscle', 'Muscoli', 'number'],
+  ['muscle', 'Muscoli (%)', 'number'],
   ['bone', 'Ossa', 'number'],
   ['visceral_fat', 'Grasso viscerale', 'number'],
   ['metabolic_age', 'Età metabolica', 'number'],
   ['heart_rate_bpm', 'Battito (bpm)', 'number'],
   ['left_arm_body_fat', 'Braccio SX grasso', 'number'],
-  ['left_arm_muscle', 'Braccio SX muscoli', 'number'],
+  ['left_arm_muscle', 'Braccio SX muscoli (%)', 'number'],
   ['right_arm_body_fat', 'Braccio DX grasso', 'number'],
-  ['right_arm_muscle', 'Braccio DX muscoli', 'number'],
+  ['right_arm_muscle', 'Braccio DX muscoli (%)', 'number'],
   ['left_leg_body_fat', 'Gamba SX grasso', 'number'],
-  ['left_leg_muscle', 'Gamba SX muscoli', 'number'],
+  ['left_leg_muscle', 'Gamba SX muscoli (%)', 'number'],
   ['right_leg_body_fat', 'Gamba DX grasso', 'number'],
-  ['right_leg_muscle', 'Gamba DX muscoli', 'number'],
+  ['right_leg_muscle', 'Gamba DX muscoli (%)', 'number'],
   ['trunk_body_fat', 'Tronco grasso', 'number'],
-  ['trunk_muscle', 'Tronco muscoli', 'number']
+  ['trunk_muscle', 'Tronco muscoli (%)', 'number']
 ];
 
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
@@ -93,18 +98,32 @@ function card(label, value, delta = '', accent = 'var(--teal)') {
 
 async function loadDashboard() {
   const data = await api('dashboard');
-  const m = data.latest_measurement || {};
+  const summary = data.metric_summary || {};
   $('#dashboardCards').innerHTML = [
-    card('Peso corrente', m.weight_kg ? `${fmt.format(m.weight_kg)} kg` : 'N/D', 'Ultima rilevazione', 'var(--teal)'),
-    card('BMI', m.bmi ? fmt.format(m.bmi) : 'N/D', 'Valore corrente', 'var(--teal)'),
-    card('Massa grassa', m.body_fat ? `${fmt.format(m.body_fat)} %` : 'N/D', 'Da bilancia', 'var(--coral)'),
-    card('Muscoli', m.muscle ? fmt.format(m.muscle) : 'N/D', 'Semantica originale', 'var(--lime)'),
+    metricRow('Peso', 'peso', summary.peso, 'var(--teal)'),
+    metricRow('BMI', 'bmi', summary.bmi, 'var(--teal)'),
+    metricRow('Massa grassa', 'massa_grassa', summary.massa_grassa, 'var(--coral)'),
+    '<div class="metric-grid">',
     card('Dose GLP-1 attuale', data.next_injection ? `${fmt.format(data.next_injection.planned_dose_mg)} mg` : 'N/D', 'Prossima programmata', 'var(--violet)'),
     card('Prossima iniezione', data.next_injection ? dateTime(data.next_injection.scheduled_at) : 'Nessuna', '', 'var(--violet)'),
     card('Passi oggi', fmtInt.format(data.steps_today), 'Obiettivo 10.000', 'var(--teal)'),
-    card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)')
+    card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)'),
+    '</div>'
   ].join('');
   drawMetricChart('overviewChart', await api('results&metric=peso&range=3m'), 'Peso');
+}
+
+function metricRow(title, metric, data = {}, accent = 'var(--teal)') {
+  const unit = metricUnits[metric] || '';
+  const current = formatMetricValue(data.current, metric);
+  const target = formatMetricValue(data.target, metric);
+  const delta = formatSignedMetricValue(data.target_delta, metric);
+  const change = formatSignedMetricValue(data.change_7d, metric);
+  return `<section class="dashboard-metric-row" aria-label="${title}">
+    ${card(`${title} corrente`, current, change !== 'N/D' ? `${change} vs 7 giorni fa` : 'vs 7 giorni fa', accent)}
+    ${card(`${title} target`, target, data.target === null || data.target === undefined ? 'Imposta un obiettivo' : 'Obiettivo attivo', accent)}
+    ${card('Delta da target', delta, delta !== 'N/D' && unit === 'kg' ? 'kg da perdere' : 'Distanza obiettivo', accent)}
+  </section>`;
 }
 
 async function loadResults() {
@@ -290,7 +309,7 @@ function boot(data) {
   initNav();
   populateControls();
   setupAppForms();
-  $('#todayLabel').textContent = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date());
+  $('#todayLabel').innerHTML = `Panoramica <span>Aggiornato oggi, ${new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(new Date())}</span> <i aria-hidden="true"></i>`;
   loadDashboard();
   if (new URLSearchParams(location.search).get('share') === 'csv') loadSharedImport();
 }
@@ -336,6 +355,17 @@ function formatKpi(key, value, metric) {
   if (key.includes('percentuale')) return `${prefix}${fmt.format(value)} %`;
   if (metric === 'passi' || key.includes('giorni') || key.includes('totale_periodo')) return `${fmtInt.format(value)}${unit === 'passi' ? ' passi' : ''}`;
   return `${prefix}${fmt.format(value)}${unit ? ` ${unit}` : ''}`;
+}
+function formatMetricValue(value, metric) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/D';
+  const unit = metricUnits[metric] || '';
+  return `${fmt.format(Number(value))}${unit ? ` ${unit}` : ''}`;
+}
+function formatSignedMetricValue(value, metric) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/D';
+  const unit = metricUnits[metric] || '';
+  const number = Number(value);
+  return `${number > 0 ? '+' : ''}${fmt.format(number)}${unit ? ` ${unit}` : ''}`;
 }
 function inputValue(value, type) {
   if (value === null || value === undefined) return '';

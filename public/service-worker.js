@@ -1,4 +1,4 @@
-const CACHE_NAME = 'body-tracker-v2';
+const CACHE_NAME = 'body-tracker-v3';
 const APP_SHELL = ['/', '/manifest.json', '/assets/app.css', '/assets/app.js', '/assets/icon.svg'];
 
 self.addEventListener('install', (event) => {

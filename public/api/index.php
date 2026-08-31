@@ -66,6 +66,7 @@ try {
 
     if ($path === 'dashboard') {
         $latest = (new MeasurementRepository($pdo))->latest((int) $user['id']);
+        $metricSummary = dashboard_metric_summary($pdo, (int) $user['id']);
         $today = date('Y-m-d');
         $steps = $pdo->prepare('SELECT steps FROM daily_steps WHERE user_id = ? AND step_date = ?');
         $steps->execute([$user['id'], $today]);
@@ -75,6 +76,7 @@ try {
         $workouts->execute([$user['id']]);
         Response::ok([
             'latest_measurement' => $latest,
+            'metric_summary' => $metricSummary,
             'steps_today' => (int) ($steps->fetchColumn() ?: 0),
             'next_injection' => $nextInjection->fetch() ?: null,
             'completed_workouts_week' => (int) $workouts->fetchColumn(),
@@ -341,4 +343,53 @@ function normalize_measured_at(string $value): string
         return $value . ':00';
     }
     return $value;
+}
+
+function dashboard_metric_summary(PDO $pdo, int $userId): array
+{
+    $definitions = [
+        'peso' => ['column' => 'weight_kg', 'goal' => 'peso'],
+        'bmi' => ['column' => 'bmi', 'goal' => 'bmi'],
+        'massa_grassa' => ['column' => 'body_fat', 'goal' => 'massa_grassa'],
+    ];
+    $summary = [];
+    foreach ($definitions as $key => $definition) {
+        $column = $definition['column'];
+        $latest = dashboard_measurement_value($pdo, $userId, $column, 'DESC');
+        $initial = dashboard_measurement_value($pdo, $userId, $column, 'ASC');
+        $previous = dashboard_previous_value($pdo, $userId, $column);
+        $target = dashboard_goal_value($pdo, $userId, $definition['goal']);
+        $summary[$key] = [
+            'current' => $latest['value'] ?? null,
+            'current_at' => $latest['measured_at'] ?? null,
+            'initial' => $initial['value'] ?? null,
+            'initial_at' => $initial['measured_at'] ?? null,
+            'target' => $target,
+            'target_delta' => ($target !== null && isset($latest['value'])) ? ((float) $latest['value'] - $target) : null,
+            'change_7d' => (isset($latest['value'], $previous['value'])) ? ((float) $latest['value'] - (float) $previous['value']) : null,
+        ];
+    }
+    return $summary;
+}
+
+function dashboard_measurement_value(PDO $pdo, int $userId, string $column, string $direction): ?array
+{
+    $stmt = $pdo->prepare("SELECT {$column} AS value, measured_at FROM body_measurements WHERE user_id = ? AND {$column} IS NOT NULL ORDER BY measured_at {$direction}, id {$direction} LIMIT 1");
+    $stmt->execute([$userId]);
+    return $stmt->fetch() ?: null;
+}
+
+function dashboard_previous_value(PDO $pdo, int $userId, string $column): ?array
+{
+    $stmt = $pdo->prepare("SELECT {$column} AS value, measured_at FROM body_measurements WHERE user_id = ? AND {$column} IS NOT NULL AND measured_at <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) ORDER BY measured_at DESC, id DESC LIMIT 1");
+    $stmt->execute([$userId]);
+    return $stmt->fetch() ?: null;
+}
+
+function dashboard_goal_value(PDO $pdo, int $userId, string $metricKey): ?float
+{
+    $stmt = $pdo->prepare('SELECT target_value FROM goals WHERE user_id = ? AND metric_key = ? AND is_active = 1 ORDER BY created_at DESC, id DESC LIMIT 1');
+    $stmt->execute([$userId, $metricKey]);
+    $value = $stmt->fetchColumn();
+    return $value === false ? null : (float) $value;
 }
