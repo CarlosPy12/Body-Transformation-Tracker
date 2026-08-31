@@ -240,11 +240,12 @@ use App\Support\Env;
             <button id="prevMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese precedente"></button>
             <input id="monthPicker" type="month" aria-label="Mese calendario">
             <button id="nextMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese successivo"></button>
+            <button id="todayMonthBtn" class="ghost-button today-button" type="button">Oggi</button>
           </div>
         </div>
         <div id="calendarLegend" class="calendar-legend"></div>
         <div id="calendarGrid" class="calendar-grid"></div>
-        <div id="dayEvents" class="panel"></div>
+        <div id="dayEvents" class="panel day-detail"></div>
       </section>
 
       <section id="impostazioni" class="view">

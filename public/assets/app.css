@@ -151,6 +151,7 @@ select option { color: #101418; }
 .calendar-controls input { width: 180px; text-align: center; }
 .icon-button { width: 46px; height: 46px; padding: 0; display: inline-grid; place-items: center; }
 .icon-button svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.today-button { height: 46px; padding: 0 .95rem; display: inline-flex; align-items: center; justify-content: center; }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: -.25rem 0 .85rem; color: var(--muted); font-size: .84rem; }
 .calendar-legend span { display: inline-flex; align-items: center; gap: .4rem; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; }
@@ -162,10 +163,13 @@ select option { color: #101418; }
 .event-icon.misurazione { color: var(--teal); }
 .event-icon.iniezione { color: var(--violet); }
 .event-icon.allenamento { color: var(--lime); }
+.event-icon.passi { color: var(--teal); }
 .day-event { display: flex; align-items: flex-start; gap: .62rem; margin: .85rem 0 0; }
 .day-head { grid-template-columns: 1fr auto; }
 .day-actions { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: flex-end; }
 .day-actions button { display: inline-flex; align-items: center; gap: .42rem; padding: .62rem .78rem; }
+.day-detail { padding: 1.25rem 1.35rem; }
+.complete-inline { margin-left: auto; padding: .52rem .68rem; white-space: nowrap; }
 
 .measurements-panel { overflow: hidden; }
 .table-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--line); border-radius: 14px; margin-top: .9rem; }

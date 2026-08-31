@@ -51,7 +51,8 @@ const measurementColumns = [
 const eventTypes = {
   misurazione: { label: 'Misurazione corporea', shortLabel: 'Misurazione', icon: 'scale', className: 'misurazione' },
   iniezione: { label: 'GLP-1', shortLabel: 'Iniezione', icon: 'syringe', className: 'iniezione' },
-  allenamento: { label: 'Allenamento', shortLabel: 'Allenamento', icon: 'dumbbell', className: 'allenamento' }
+  allenamento: { label: 'Allenamento', shortLabel: 'Allenamento', icon: 'dumbbell', className: 'allenamento' },
+  passi: { label: 'Passi', shortLabel: 'Passi', icon: 'footsteps', className: 'passi' }
 };
 
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
@@ -177,7 +178,7 @@ function drawMetricChart(canvasId, data, label) {
 }
 
 async function loadInjections() {
-  const rows = await api(`injections${rangeQuery()}`);
+  const rows = await api(`injections${rangeQuery()}&include_future=1`);
   $('#injectionTable').innerHTML = renderInjectionTable(rows);
   makeSortable($('#injectionTable'));
   document.querySelectorAll('[data-complete]').forEach(btn => btn.addEventListener('click', async () => {
@@ -224,7 +225,7 @@ function renderInjectionTable(rows) {
 async function loadCalendar() {
   const month = $('#monthPicker').value || new Date().toISOString().slice(0, 7);
   $('#monthPicker').value = month;
-  $('#calendarTitle').textContent = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`));
+  $('#calendarTitle').textContent = capitalizeFirst(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`)));
   const rows = uniqueCalendarEvents(await api(`calendar&month=${month}`));
   const byDay = rows.reduce((acc, row) => ((acc[row.event_date] ||= []).push(row), acc), {});
   const first = new Date(`${month}-01T00:00:00`);
@@ -247,8 +248,10 @@ function renderDayDetails(day, events) {
     <button type="button" class="ghost-button" data-day-dialog="quickMeasurementDialog" data-day="${day}">${eventIcon('misurazione', 'Misurazione')} Misurazione</button>
     <button type="button" class="ghost-button" data-day-dialog="quickInjectionDialog" data-day="${day}">${eventIcon('iniezione', 'Iniezione')} Iniezione</button>
     <button type="button" class="ghost-button" data-day-dialog="quickWorkoutDialog" data-day="${day}">${eventIcon('allenamento', 'Allenamento')} Allenamento</button>
-  </div></div>` + (events.map(e => `<p class="day-event">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span></p>`).join('') || '<p class="muted">Nessun evento.</p>');
+    <button type="button" class="ghost-button" data-day-dialog="quickStepsDialog" data-day="${day}">${eventIcon('passi', 'Passi')} Passi</button>
+  </div></div>` + (events.map(e => `<p class="day-event">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span>${calendarEventAction(e)}</p>`).join('') || '<p class="muted">Nessun evento.</p>');
   document.querySelectorAll('[data-day-dialog]').forEach(btn => btn.addEventListener('click', () => openDayDialog(btn.dataset.dayDialog, btn.dataset.day)));
+  document.querySelectorAll('[data-calendar-complete]').forEach(btn => btn.addEventListener('click', () => completeCalendarEvent(btn.dataset.calendarComplete, btn.dataset.eventId)));
 }
 
 async function loadAdmin() {
@@ -304,6 +307,7 @@ function setupAppForms() {
   $('#monthPicker').addEventListener('change', loadCalendar);
   $('#prevMonthBtn').addEventListener('click', () => shiftCalendarMonth(-1));
   $('#nextMonthBtn').addEventListener('click', () => shiftCalendarMonth(1));
+  $('#todayMonthBtn').addEventListener('click', goToTodayMonth);
   $('#dashboardRange').addEventListener('change', e => {
     state.range = e.target.value;
     applyPresetRange(state.range);
@@ -321,18 +325,28 @@ function toggleSidebar() {
   $('#sidebarToggle').setAttribute('aria-expanded', String(!state.sidebarCollapsed));
 }
 
-function openDayDialog(dialogId, day) {
-  loadEntryDefaults();
+async function openDayDialog(dialogId, day) {
+  await loadEntryDefaults();
   const dialog = document.getElementById(dialogId);
   if (!dialog) return;
   const dateTime = `${day}T${new Date().toTimeString().slice(0, 5)}`;
-  dialog.querySelector('input[name="measured_at"]')?.setAttribute('value', dateTime);
-  dialog.querySelector('input[name="scheduled_at"]')?.setAttribute('value', dateTime);
-  dialog.querySelector('input[name="step_date"]')?.setAttribute('value', day);
-  dialog.querySelector('input[name="measured_at"]') && (dialog.querySelector('input[name="measured_at"]').value = dateTime);
-  dialog.querySelector('input[name="scheduled_at"]') && (dialog.querySelector('input[name="scheduled_at"]').value = dateTime);
-  dialog.querySelector('input[name="step_date"]') && (dialog.querySelector('input[name="step_date"]').value = day);
+  const measuredAt = dialog.querySelector('input[name="measured_at"]');
+  const scheduledAt = dialog.querySelector('input[name="scheduled_at"]');
+  const stepDate = dialog.querySelector('input[name="step_date"]');
+  if (measuredAt) measuredAt.value = dateTime;
+  if (scheduledAt) scheduledAt.value = dateTime;
+  if (stepDate) stepDate.value = day;
   dialog.showModal();
+}
+
+async function completeCalendarEvent(type, id) {
+  if (!id) return;
+  const route = type === 'iniezione' ? `injections/${id}/complete` : type === 'allenamento' ? `workouts/${id}/complete` : null;
+  if (!route) return;
+  await api(route, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' '), completed_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
+  loadCalendar();
+  loadDashboard();
+  if (state.active === 'iniezioni') loadInjections();
 }
 
 function submitJson(path, after) {
@@ -484,6 +498,11 @@ function shiftCalendarMonth(delta) {
   const date = new Date(`${current}-01T00:00:00`);
   date.setMonth(date.getMonth() + delta);
   $('#monthPicker').value = isoDate(date).slice(0, 7);
+  loadCalendar();
+}
+
+function goToTodayMonth() {
+  $('#monthPicker').value = isoDate(new Date()).slice(0, 7);
   loadCalendar();
 }
 
@@ -679,7 +698,19 @@ function eventIcon(type, label) {
   return `<span class="event-icon ${meta.className}" title="${label}" aria-label="${label}">${iconSvg(meta.icon)}</span>`;
 }
 function eventLabel(e) { return (eventTypes[e.type] || {}).label || e.type; }
-function eventText(e) { if (e.type === 'misurazione') return `${fmt.format(e.weight_kg)} kg`; if (e.type === 'iniezione') return `${fmt.format(e.planned_dose_mg)} mg · ${statusIt(e.status)}`; return `${e.workout_type} · ${statusIt(e.status)}`; }
+function eventText(e) {
+  if (e.type === 'misurazione') return `${fmt.format(e.weight_kg)} kg`;
+  if (e.type === 'iniezione') return `${fmt.format(e.planned_dose_mg)} mg · ${statusIt(e.status)}`;
+  if (e.type === 'passi') return `${fmtInt.format(e.steps)} passi`;
+  return `${e.workout_type} · ${statusIt(e.status)}`;
+}
+function calendarEventAction(e) {
+  if ((e.type === 'iniezione' || e.type === 'allenamento') && e.status === 'scheduled') {
+    return `<button type="button" class="ghost-button complete-inline" data-calendar-complete="${e.type}" data-event-id="${e.id}">Segna effettuata</button>`;
+  }
+  return '';
+}
+function capitalizeFirst(value) { return value ? value.charAt(0).toLocaleUpperCase('it-IT') + value.slice(1) : value; }
 function urlBase64ToUint8Array(base64String) { const padding = '='.repeat((4 - base64String.length % 4) % 4); const rawData = atob((base64String + padding).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...rawData].map(c => c.charCodeAt(0))); }
 
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); state.deferredInstall = e; $('#installBtn').hidden = false; });

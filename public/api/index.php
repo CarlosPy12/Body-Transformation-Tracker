@@ -265,7 +265,11 @@ try {
             $values[] = $_GET['start'] . ' 00:00:00';
         }
         if (!empty($_GET['end']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['end'])) {
-            $sql .= ' AND i.scheduled_at <= ?';
+            if (!empty($_GET['include_future'])) {
+                $sql .= ' AND (i.scheduled_at <= ? OR (i.status = "scheduled" AND i.scheduled_at >= CURDATE()))';
+            } else {
+                $sql .= ' AND i.scheduled_at <= ?';
+            }
             $values[] = $_GET['end'] . ' 23:59:59';
         }
         $sql .= ' ORDER BY i.scheduled_at DESC LIMIT 200';
@@ -344,7 +348,7 @@ try {
 
     if (preg_match('#^workouts/(\d+)/complete$#', $path, $m) && $method === 'POST') {
         require_csrf($auth);
-        $stmt = $pdo->prepare('UPDATE workout_sessions SET status = "completed", completed_at = ?, duration_minutes = ?, calories_burned = ?, notes = ? WHERE id = ? AND user_id = ?');
+        $stmt = $pdo->prepare('UPDATE workout_sessions SET status = "completed", completed_at = ?, duration_minutes = COALESCE(?, duration_minutes), calories_burned = COALESCE(?, calories_burned), notes = COALESCE(?, notes) WHERE id = ? AND user_id = ?');
         $stmt->execute([$input['completed_at'] ?? date('Y-m-d H:i:s'), $input['duration_minutes'] ?? null, $input['calories_burned'] ?? null, $input['notes'] ?? null, $m[1], $user['id']]);
         Response::ok(['updated' => $stmt->rowCount()]);
         return;
@@ -359,6 +363,7 @@ try {
             ['body_measurements', 'measured_at', 'misurazione'],
             ['glp1_injections', 'scheduled_at', 'iniezione'],
             ['workout_sessions', 'scheduled_at', 'allenamento'],
+            ['daily_steps', 'step_date', 'passi'],
         ] as [$table, $column, $type]) {
             $stmt = $pdo->prepare("SELECT *, DATE({$column}) AS event_date FROM {$table} WHERE user_id = ? AND DATE({$column}) BETWEEN ? AND ?");
             $stmt->execute([$user['id'], $from, $to]);
