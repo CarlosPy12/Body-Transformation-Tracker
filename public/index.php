@@ -241,11 +241,7 @@ use App\Support\Env;
             <button id="nextMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese successivo">›</button>
           </div>
         </div>
-        <div class="calendar-legend">
-          <span><i class="dot misurazione"></i> Misurazione</span>
-          <span><i class="dot iniezione"></i> Iniezione</span>
-          <span><i class="dot allenamento"></i> Allenamento</span>
-        </div>
+        <div id="calendarLegend" class="calendar-legend"></div>
         <div id="calendarGrid" class="calendar-grid"></div>
         <div id="dayEvents" class="panel"></div>
       </section>

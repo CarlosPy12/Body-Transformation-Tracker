@@ -48,6 +48,11 @@ const measurementColumns = [
   ['trunk_body_fat', 'Tronco grasso', 'number'],
   ['trunk_muscle', 'Tronco muscoli (%)', 'number']
 ];
+const eventTypes = {
+  misurazione: { label: 'Misurazione corporea', shortLabel: 'Misurazione', icon: 'scale', className: 'misurazione' },
+  iniezione: { label: 'GLP-1', shortLabel: 'Iniezione', icon: 'syringe', className: 'iniezione' },
+  allenamento: { label: 'Allenamento', shortLabel: 'Allenamento', icon: 'dumbbell', className: 'allenamento' }
+};
 
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
 const fmtInt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
@@ -224,12 +229,13 @@ async function loadCalendar() {
   $('#calendarGrid').innerHTML = Array.from({ length: days }, (_, i) => {
     const day = String(i + 1).padStart(2, '0');
     const key = `${month}-${day}`;
-    const dots = (byDay[key] || []).map(e => `<span class="dot ${e.type}"></span>`).join('');
-    return `<div class="day"><button data-day="${key}"><strong>${i + 1}</strong><span class="dots">${dots}</span></button></div>`;
+    const events = byDay[key] || [];
+    const icons = events.map(e => eventIcon(e.type, eventText(e))).join('');
+    return `<div class="day"><button data-day="${key}"><strong>${i + 1}</strong><span class="calendar-events">${icons}</span></button></div>`;
   }).join('');
   document.querySelectorAll('[data-day]').forEach(btn => btn.addEventListener('click', () => {
     const events = byDay[btn.dataset.day] || [];
-    $('#dayEvents').innerHTML = `<h2>${dateIt(btn.dataset.day)}</h2>` + (events.map(e => `<p><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></p>`).join('') || '<p class="muted">Nessun evento.</p>');
+    $('#dayEvents').innerHTML = `<h2>${dateIt(btn.dataset.day)}</h2>` + (events.map(e => `<p class="day-event">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span></p>`).join('') || '<p class="muted">Nessun evento.</p>');
   }));
 }
 
@@ -373,6 +379,7 @@ function populateControls() {
     document.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', b === btn));
     loadResults();
   }));
+  $('#calendarLegend').innerHTML = Object.values(eventTypes).map(meta => `<span>${eventIcon(meta.className, meta.shortLabel)} ${meta.shortLabel}</span>`).join('');
 }
 
 function hydrateDefaultDates() {
@@ -629,6 +636,7 @@ function iconSvg(name) {
     calendar: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path></svg>',
     settings: '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .4 1.7 1.7 0 0 0-.5 1.4H9a1.7 1.7 0 0 0-.5-1.4 1.7 1.7 0 0 0-2-.4l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.2-1.1V10a1.7 1.7 0 0 0 1.2-1.1A1.7 1.7 0 0 0 4.4 7l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2-.4A1.7 1.7 0 0 0 9 1.8h6a1.7 1.7 0 0 0 .5 1.4 1.7 1.7 0 0 0 2 .4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 20.5 10v3.9a1.7 1.7 0 0 0-1.1 1.1Z"></path></svg>',
     weight: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="3"></rect><path d="M9 8.5a4 4 0 0 1 6 0"></path><path d="M12 8.5V11"></path></svg>',
+    scale: '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="3"></rect><path d="M9 9a4.4 4.4 0 0 1 6 0"></path><path d="m12 9 1.5 2"></path><path d="M9 15h6"></path></svg>',
     bmi: '<svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M7 8h10"></path><path d="M6 15h12"></path><path d="M9 3h6"></path><path d="M8 21h8"></path></svg>',
     fat: '<svg viewBox="0 0 24 24"><path d="M12 3c3 3.2 6 6.8 6 10.5a6 6 0 0 1-12 0C6 9.8 9 6.2 12 3Z"></path><path d="M9.5 13.5h5"></path><path d="M12 11v5"></path></svg>',
     target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path></svg>',
@@ -638,7 +646,11 @@ function iconSvg(name) {
   return icons[name] || '';
 }
 function statusIt(s) { return ({ scheduled: 'Programmata', completed: 'Effettuata', missed: 'Mancata', skipped: 'Saltata', cancelled: 'Annullata' })[s] || s; }
-function eventLabel(e) { return ({ misurazione: 'Misurazione corporea', iniezione: 'GLP-1', allenamento: 'Allenamento' })[e.type]; }
+function eventIcon(type, label) {
+  const meta = eventTypes[type] || eventTypes.misurazione;
+  return `<span class="event-icon ${meta.className}" title="${label}" aria-label="${label}">${iconSvg(meta.icon)}</span>`;
+}
+function eventLabel(e) { return (eventTypes[e.type] || {}).label || e.type; }
 function eventText(e) { if (e.type === 'misurazione') return `${fmt.format(e.weight_kg)} kg`; if (e.type === 'iniezione') return `${fmt.format(e.planned_dose_mg)} mg · ${statusIt(e.status)}`; return `${e.workout_type} · ${statusIt(e.status)}`; }
 function urlBase64ToUint8Array(base64String) { const padding = '='.repeat((4 - base64String.length % 4) % 4); const rawData = atob((base64String + padding).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...rawData].map(c => c.charCodeAt(0))); }
 
