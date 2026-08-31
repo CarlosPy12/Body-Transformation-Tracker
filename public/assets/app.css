@@ -86,6 +86,8 @@ select option { color: #101418; }
 .topbar .muted i { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 2px rgba(34,216,207,.18); }
 .topbar-actions { display: flex; align-items: center; gap: .7rem; }
 .topbar-actions select { width: auto; min-width: 178px; padding: .66rem .82rem; border-radius: 8px; background: rgba(255,255,255,.045); font-size: .86rem; }
+.top-presets { padding: .45rem; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(255,255,255,.035); }
+.top-presets button { min-height: 42px; padding: .55rem .85rem; border-radius: 8px; background: rgba(255,255,255,.04); }
 .date-range { display: flex; align-items: end; gap: .55rem; padding: .45rem; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(255,255,255,.035); }
 .date-range label { gap: .25rem; font-size: .68rem; }
 .date-range input { width: 138px; padding: .5rem .58rem; border-radius: 8px; font-size: .8rem; }
@@ -121,9 +123,11 @@ select option { color: #101418; }
 .two-column { display: grid; grid-template-columns: minmax(280px, 410px) 1fr; gap: .85rem; align-items: start; }
 .injection-layout { display: grid; gap: .85rem; }
 .form-panel { display: grid; gap: .9rem; }
-.horizontal-form { grid-template-columns: repeat(5, minmax(150px, 1fr)) auto; align-items: end; }
+.horizontal-form { gap: .85rem; }
 .horizontal-form h2 { grid-column: 1 / -1; }
-.horizontal-form textarea { min-height: 43px; }
+.injection-form-grid { display: grid; grid-template-columns: minmax(160px, 1.1fr) minmax(150px, 1fr) 110px minmax(190px, 1.15fr) minmax(150px, .9fr) minmax(170px, 1fr) auto; gap: .85rem; align-items: end; }
+.injection-form-grid button { min-height: 50px; white-space: nowrap; }
+.notes-field textarea { min-height: 50px; height: 50px; resize: vertical; }
 .split-fields { display: grid; grid-template-columns: 1fr 120px; gap: .75rem; }
 .check-row { display: flex; grid-template-columns: none; align-items: center; gap: .55rem; color: var(--text); }
 .check-row input { width: auto; }
@@ -135,9 +139,10 @@ select option { color: #101418; }
 .segmented button { background: rgba(255,255,255,.05); color: var(--text); border: 1px solid var(--line); padding: .65rem .85rem; }
 .segmented button.active { background: rgba(34,216,207,.18); color: var(--teal); }
 
-.calendar-head { grid-template-columns: 1fr auto; }
-.calendar-controls { display: flex; align-items: center; gap: .5rem; }
-.calendar-controls input { width: 160px; }
+.calendar-mode .topbar-actions { display: none; }
+.calendar-head { display: grid; justify-items: center; gap: .7rem; margin-bottom: .8rem; }
+.calendar-controls { display: flex; align-items: center; justify-content: center; gap: .5rem; }
+.calendar-controls input { width: 180px; text-align: center; }
 .icon-button { width: 42px; height: 42px; padding: 0; display: inline-grid; place-items: center; font-size: 1.35rem; }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: -.25rem 0 .85rem; color: var(--muted); font-size: .84rem; }
 .calendar-legend span { display: inline-flex; align-items: center; gap: .4rem; }
@@ -184,7 +189,7 @@ select option { color: #101418; }
   .dashboard-metric-row, .dashboard-metric-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quick-grid { grid-template-columns: 1fr; }
   .entry-launcher { grid-template-columns: 1fr; }
-  .horizontal-form { grid-template-columns: 1fr; }
+  .injection-form-grid { grid-template-columns: 1fr; }
   .two-column { grid-template-columns: 1fr; }
   .date-range { width: 100%; }
   .date-range input { width: 100%; }

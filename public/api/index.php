@@ -258,8 +258,19 @@ try {
     }
 
     if ($path === 'injections' && $method === 'GET') {
-        $stmt = $pdo->prepare('SELECT i.*, m.name AS medication_name FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ? ORDER BY i.scheduled_at DESC LIMIT 80');
-        $stmt->execute([$user['id']]);
+        $sql = 'SELECT i.*, m.name AS medication_name FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ?';
+        $values = [$user['id']];
+        if (!empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['start'])) {
+            $sql .= ' AND i.scheduled_at >= ?';
+            $values[] = $_GET['start'] . ' 00:00:00';
+        }
+        if (!empty($_GET['end']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['end'])) {
+            $sql .= ' AND i.scheduled_at <= ?';
+            $values[] = $_GET['end'] . ' 23:59:59';
+        }
+        $sql .= ' ORDER BY i.scheduled_at DESC LIMIT 200';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($values);
         Response::ok($stmt->fetchAll());
         return;
     }

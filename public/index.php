@@ -180,15 +180,15 @@ use App\Support\Env;
         <div class="injection-layout">
           <form id="injectionForm" class="panel form-panel horizontal-form">
             <h2>Programma iniezione</h2>
-            <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
-            <div class="split-fields">
+            <div class="injection-form-grid">
+              <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
               <label>Data partenza <input name="start_date" type="date" required></label>
               <label>Ora <input name="start_time" type="time" required></label>
+              <label>Ricorrenza settimanale fino a <input name="recurrence_until" type="date"></label>
+              <label>Dose prevista (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
+              <label class="notes-field">Note <textarea name="notes" rows="1"></textarea></label>
+              <button type="submit">Programma calendario</button>
             </div>
-            <label>Ricorrenza settimanale fino a <input name="recurrence_until" type="date"></label>
-            <label>Dose prevista (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
-            <label>Note <textarea name="notes" rows="3"></textarea></label>
-            <button type="submit">Programma calendario</button>
           </form>
           <div class="panel measurements-panel">
             <h2>Storico</h2>
@@ -233,7 +233,7 @@ use App\Support\Env;
       </section>
 
       <section id="calendario" class="view">
-        <div class="section-head calendar-head">
+        <div class="calendar-head">
           <h2 id="calendarTitle">Calendario</h2>
           <div class="calendar-controls">
             <button id="prevMonthBtn" class="ghost-button icon-button" type="button" aria-label="Mese precedente">‹</button>

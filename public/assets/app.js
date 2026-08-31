@@ -90,6 +90,7 @@ function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active-view', v.id === id));
   document.querySelectorAll('.nav-button').forEach(b => b.classList.toggle('active', b.dataset.view === id));
   $('#pageTitle').textContent = sections.find(s => s[0] === id)?.[1] || 'Riepilogo';
+  document.body.classList.toggle('calendar-mode', id === 'calendario');
   if (id === 'aggiungi') loadEntryDefaults();
   if (id === 'risultati') loadResults();
   if (id === 'iniezioni') loadInjections();
@@ -168,7 +169,7 @@ function drawMetricChart(canvasId, data, label) {
 }
 
 async function loadInjections() {
-  const rows = await api('injections');
+  const rows = await api(`injections${rangeQuery()}`);
   $('#injectionTable').innerHTML = renderInjectionTable(rows);
   makeSortable($('#injectionTable'));
   document.querySelectorAll('[data-complete]').forEach(btn => btn.addEventListener('click', async () => {
@@ -216,7 +217,7 @@ async function loadCalendar() {
   const month = $('#monthPicker').value || new Date().toISOString().slice(0, 7);
   $('#monthPicker').value = month;
   $('#calendarTitle').textContent = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`));
-  const rows = await api(`calendar&month=${month}`);
+  const rows = uniqueCalendarEvents(await api(`calendar&month=${month}`));
   const byDay = rows.reduce((acc, row) => ((acc[row.event_date] ||= []).push(row), acc), {});
   const first = new Date(`${month}-01T00:00:00`);
   const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
@@ -354,7 +355,7 @@ function populateControls() {
   $('#quickGoalForm select[name="metric_key"]').innerHTML = metricOptions;
   $('#metricSelect').addEventListener('change', e => { state.metric = e.target.value; loadResults(); });
   const ranges = [['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
-  $('#topRangeTabs').innerHTML = [...ranges, ['custom', 'Da/A']].map(([k, v]) => `<button type="button" data-top-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
+  $('#topRangeTabs').innerHTML = ranges.map(([k, v]) => `<button type="button" data-top-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
   document.querySelectorAll('[data-top-range]').forEach(btn => btn.addEventListener('click', () => {
     if (btn.dataset.topRange !== 'custom') {
       state.range = btn.dataset.topRange;
@@ -363,6 +364,7 @@ function populateControls() {
     setRangeButtonState(btn.dataset.topRange || 'custom');
     loadDashboard();
     if (state.active === 'risultati') loadResults();
+    if (state.active === 'iniezioni') loadInjections();
   }));
   $('#rangeTabs').innerHTML = ranges.map(([k, v]) => `<button data-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
   document.querySelectorAll('[data-range]').forEach(btn => btn.addEventListener('click', () => {
@@ -399,6 +401,7 @@ function updateDateRange() {
   setRangeButtonState('custom');
   loadDashboard();
   if (state.active === 'risultati') loadResults();
+  if (state.active === 'iniezioni') loadInjections();
 }
 
 function applyPresetRange(range) {
@@ -420,6 +423,23 @@ function applyPresetRange(range) {
 function setRangeButtonState(activeRange) {
   document.querySelectorAll('[data-top-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.topRange === activeRange));
   document.querySelectorAll('[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === state.range && activeRange !== 'custom'));
+}
+
+function uniqueCalendarEvents(rows) {
+  const seen = new Set();
+  return rows.filter(row => {
+    const key = row.type === 'misurazione'
+      ? [
+          row.type, row.event_date, row.weight_kg, row.bmi, row.body_fat, row.body_water, row.muscle,
+          row.bone, row.left_arm_body_fat, row.left_arm_muscle, row.right_arm_body_fat, row.right_arm_muscle,
+          row.left_leg_body_fat, row.left_leg_muscle, row.right_leg_body_fat, row.right_leg_muscle,
+          row.trunk_body_fat, row.trunk_muscle, row.metabolic_age, row.heart_rate_bpm, row.visceral_fat
+        ].join('|')
+      : `${row.type}|${row.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function rangeQuery() {
