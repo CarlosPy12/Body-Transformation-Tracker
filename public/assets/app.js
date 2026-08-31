@@ -58,6 +58,32 @@ const eventTypes = {
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
 const fmtInt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
 const $ = (sel) => document.querySelector(sel);
+const doseColors = ['#8f8f8f', '#8d38e8', '#22d8cf', '#e23295', '#98e33f', '#ff9b50'];
+const doseBadgePlugin = {
+  id: 'doseBadges',
+  afterDatasetsDraw(chart) {
+    const badges = chart.config.options.plugins?.doseBadges?.badges || [];
+    if (!badges.length) return;
+    const meta = chart.getDatasetMeta(0);
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    badges.forEach(badge => {
+      const point = meta.data[badge.index];
+      if (!point) return;
+      const text = `${fmt.format(badge.dose)} mg`;
+      const x = Math.min(Math.max(point.x - 12, chartArea.left + 4), chartArea.right - 86);
+      const y = Math.max(point.y - 48, chartArea.top + 6);
+      ctx.font = '700 12px ui-sans-serif, system-ui, sans-serif';
+      const width = Math.max(56, ctx.measureText(text).width + 18);
+      roundRect(ctx, x, y, width, 30, 8);
+      ctx.fillStyle = badge.color;
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, x + 9, y + 20);
+    });
+    ctx.restore();
+  }
+};
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -163,18 +189,97 @@ async function loadResults() {
 
 function drawMetricChart(canvasId, data, label) {
   if (!window.Chart) return;
+  if (!window.__bodyTrackerDoseBadgesRegistered) {
+    Chart.register(doseBadgePlugin);
+    window.__bodyTrackerDoseBadgesRegistered = true;
+  }
   state.charts[canvasId]?.destroy();
   const labels = (data.series || []).map(p => shortDate(p.date));
   const values = (data.series || []).map(p => Number(p.value));
+  const doseTimeline = buildDoseTimeline(data.series || [], data.glp1_overlay || []);
   state.charts[canvasId] = new Chart(document.getElementById(canvasId), {
     type: 'line',
-    data: { labels, datasets: [{ label, data: values, borderColor: '#22d8cf', backgroundColor: 'rgba(34,216,207,.12)', tension: .32, pointRadius: 3, fill: true }] },
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data: values,
+        borderColor: '#22d8cf',
+        backgroundColor: 'rgba(34,216,207,.12)',
+        tension: .32,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: doseTimeline.pointColors,
+        pointBorderColor: doseTimeline.pointColors,
+        segment: {
+          borderColor: ctx => doseTimeline.pointColors[ctx.p1DataIndex] || '#22d8cf',
+          backgroundColor: ctx => hexToRgba(doseTimeline.pointColors[ctx.p1DataIndex] || '#22d8cf', .12)
+        },
+        fill: true
+      }]
+    },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: '#cfe8e7' } }, tooltip: { intersect: false, mode: 'index' } },
+      plugins: { legend: { labels: { color: '#cfe8e7' } }, tooltip: { intersect: false, mode: 'index' }, doseBadges: { badges: doseTimeline.badges } },
       scales: { x: { ticks: { color: '#9dacb1', maxRotation: 0 }, grid: { color: 'rgba(255,255,255,.06)' } }, y: { ticks: { color: '#9dacb1' }, grid: { color: 'rgba(255,255,255,.08)' } } }
     }
   });
+}
+
+function buildDoseTimeline(series, overlay) {
+  const base = '#22d8cf';
+  const parsedSeries = series.map((point, index) => ({ index, date: new Date(String(point.date).replace(' ', 'T')).getTime() }));
+  const events = overlay
+    .map(item => ({
+      date: new Date(String(item.administered_at || item.scheduled_at).replace(' ', 'T')).getTime(),
+      dose: Number(item.administered_dose_mg || item.planned_dose_mg)
+    }))
+    .filter(item => Number.isFinite(item.date) && Number.isFinite(item.dose))
+    .sort((a, b) => a.date - b.date);
+  const doseColor = new Map();
+  const colorForDose = dose => {
+    const key = dose.toFixed(2);
+    if (!doseColor.has(key)) doseColor.set(key, doseColors[doseColor.size % doseColors.length]);
+    return doseColor.get(key);
+  };
+  const doseChanges = [];
+  let lastDose = null;
+  events.forEach(event => {
+    const key = event.dose.toFixed(2);
+    if (key !== lastDose) {
+      doseChanges.push({ ...event, color: colorForDose(event.dose) });
+      lastDose = key;
+    }
+  });
+  const pointColors = parsedSeries.map(point => {
+    const active = [...doseChanges].reverse().find(event => event.date <= point.date);
+    return active?.color || base;
+  });
+  const badges = [];
+  doseChanges.forEach(event => {
+    const point = parsedSeries.find(item => item.date >= event.date) || parsedSeries[parsedSeries.length - 1];
+    if (point) badges.push({ index: point.index, dose: event.dose, color: event.color });
+  });
+  return { pointColors, badges };
+}
+
+function hexToRgba(hex, alpha) {
+  const value = hex.replace('#', '');
+  const bigint = parseInt(value.length === 3 ? value.split('').map(c => c + c).join('') : value, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + width, y, x + width, y + height, radius);
+  ctx.arcTo(x + width, y + height, x, y + height, radius);
+  ctx.arcTo(x, y + height, x, y, radius);
+  ctx.arcTo(x, y, x + width, y, radius);
+  ctx.closePath();
 }
 
 async function loadInjections() {

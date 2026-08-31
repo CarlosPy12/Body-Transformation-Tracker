@@ -29,7 +29,7 @@ final class ResultsService
         return [
             'series' => $series,
             'kpi' => $this->bodyKpi($series, $values, $target, $metric),
-            'glp1_overlay' => $this->glp1Overlay($userId, $from),
+            'glp1_overlay' => $this->glp1Overlay($userId, $from, $to),
         ];
     }
 
@@ -139,11 +139,22 @@ final class ResultsService
         ];
     }
 
-    private function glp1Overlay(int $userId, string $from): array
+    private function glp1Overlay(int $userId, string $from, ?string $to): array
     {
-        $stmt = $this->pdo->prepare('SELECT scheduled_at, administered_at, planned_dose_mg, administered_dose_mg, status FROM glp1_injections WHERE user_id = ? AND scheduled_at >= ? ORDER BY scheduled_at');
-        $stmt->execute([$userId, $from]);
-        return $stmt->fetchAll();
+        $previous = $this->pdo->prepare('SELECT scheduled_at, administered_at, planned_dose_mg, administered_dose_mg, status FROM glp1_injections WHERE user_id = ? AND scheduled_at < ? ORDER BY scheduled_at DESC LIMIT 1');
+        $previous->execute([$userId, $from]);
+        $events = $previous->fetchAll();
+
+        $sql = 'SELECT scheduled_at, administered_at, planned_dose_mg, administered_dose_mg, status FROM glp1_injections WHERE user_id = ? AND scheduled_at >= ?';
+        $values = [$userId, $from];
+        if ($to !== null) {
+            $sql .= ' AND scheduled_at <= ?';
+            $values[] = $to;
+        }
+        $sql .= ' ORDER BY scheduled_at';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($values);
+        return array_merge($events, $stmt->fetchAll());
     }
 
     private function goalValue(int $userId, string $metric): ?float
