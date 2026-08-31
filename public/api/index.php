@@ -304,6 +304,14 @@ try {
         return;
     }
 
+    if (preg_match('#^injections/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        require_csrf($auth);
+        $stmt = $pdo->prepare('DELETE FROM glp1_injections WHERE id = ? AND user_id = ?');
+        $stmt->execute([(int) $m[1], $user['id']]);
+        Response::ok(['deleted' => $stmt->rowCount()]);
+        return;
+    }
+
     if ($path === 'workouts' && $method === 'GET') {
         $stmt = $pdo->prepare('SELECT * FROM workout_sessions WHERE user_id = ? ORDER BY scheduled_at DESC LIMIT 80');
         $stmt->execute([$user['id']]);

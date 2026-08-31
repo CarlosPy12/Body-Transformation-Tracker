@@ -57,6 +57,7 @@ use App\Support\Env;
           <p id="todayLabel" class="muted"></p>
         </div>
         <div class="topbar-actions">
+          <div class="segmented top-presets" id="topRangeTabs" role="tablist" aria-label="Filtri periodo"></div>
           <div class="date-range" aria-label="Periodo dati">
             <label>Da <input id="rangeStart" type="date"></label>
             <label>A <input id="rangeEnd" type="date"></label>
@@ -66,9 +67,87 @@ use App\Support\Env;
       </header>
 
       <section id="aggiungi" class="view">
-        <div class="quick-grid">
-          <form id="quickMeasurementForm" class="panel form-panel">
-            <h2>Misurazione corporea</h2>
+        <div class="quick-grid entry-launcher">
+          <button class="entry-card panel" type="button" data-dialog="quickInjectionDialog">
+            <strong>Iniezione Mounjaro</strong>
+            <span>Programma o registra una dose effettuata.</span>
+          </button>
+          <button class="entry-card panel" type="button" data-dialog="quickWorkoutDialog">
+            <strong>Allenamento</strong>
+            <span>Salva una sessione fatta o pianificata.</span>
+          </button>
+          <button class="entry-card panel" type="button" data-dialog="quickGoalDialog">
+            <strong>Target</strong>
+            <span>Aggiorna obiettivi di peso, BMI o composizione.</span>
+          </button>
+          <button class="entry-card panel" type="button" data-dialog="quickStepsDialog">
+            <strong>Passi</strong>
+            <span>Correggi o inserisci il totale giornaliero.</span>
+          </button>
+          <button class="entry-card panel" type="button" data-dialog="quickMeasurementDialog">
+            <strong>Misurazione corporea</strong>
+            <span>Aggiungi peso e composizione corporea.</span>
+          </button>
+        </div>
+
+        <dialog id="quickInjectionDialog" class="entry-dialog">
+          <form id="quickInjectionForm" class="form-panel" method="dialog">
+            <div class="dialog-head">
+              <h2>Iniezione Mounjaro</h2>
+              <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
+            </div>
+            <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
+            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
+            <label>Dose (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
+            <label class="check-row"><input name="completed" type="checkbox" value="1" checked> Segna anche come effettuata</label>
+            <button type="submit">Salva iniezione</button>
+          </form>
+        </dialog>
+
+        <dialog id="quickWorkoutDialog" class="entry-dialog">
+          <form id="quickWorkoutForm" class="form-panel" method="dialog">
+            <div class="dialog-head">
+              <h2>Allenamento</h2>
+              <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
+            </div>
+            <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
+            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
+            <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+            <button type="submit">Salva allenamento</button>
+          </form>
+        </dialog>
+
+        <dialog id="quickGoalDialog" class="entry-dialog">
+          <form id="quickGoalForm" class="form-panel" method="dialog">
+            <div class="dialog-head">
+              <h2>Target</h2>
+              <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
+            </div>
+            <label>Metrica <select name="metric_key"></select></label>
+            <label>Target <input name="target_value" type="number" step="0.1" required></label>
+            <label>Data target <input name="target_date" type="date"></label>
+            <button type="submit">Aggiorna target</button>
+          </form>
+        </dialog>
+
+        <dialog id="quickStepsDialog" class="entry-dialog">
+          <form id="quickStepsForm" class="form-panel" method="dialog">
+            <div class="dialog-head">
+              <h2>Passi</h2>
+              <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
+            </div>
+            <label>Data <input name="step_date" type="date" required></label>
+            <label>Passi <input name="steps" type="number" min="0" step="1" required></label>
+            <button type="submit">Salva passi</button>
+          </form>
+        </dialog>
+
+        <dialog id="quickMeasurementDialog" class="entry-dialog">
+          <form id="quickMeasurementForm" class="form-panel" method="dialog">
+            <div class="dialog-head">
+              <h2>Misurazione corporea</h2>
+              <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
+            </div>
             <label>Data e ora <input name="measured_at" type="datetime-local" required></label>
             <label>Peso (kg) <input name="weight_kg" type="number" step="0.1" required></label>
             <label>BMI <input name="bmi" type="number" step="0.1"></label>
@@ -77,35 +156,7 @@ use App\Support\Env;
             <label>Muscoli (%) <input name="muscle" type="number" step="0.1"></label>
             <button type="submit">Salva misurazione</button>
           </form>
-          <form id="quickStepsForm" class="panel form-panel">
-            <h2>Passi</h2>
-            <label>Data <input name="step_date" type="date" required></label>
-            <label>Passi <input name="steps" type="number" min="0" step="1" required></label>
-            <button type="submit">Salva passi</button>
-          </form>
-          <form id="quickInjectionForm" class="panel form-panel">
-            <h2>Iniezione effettuata</h2>
-            <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
-            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
-            <label>Dose (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
-            <input name="completed" type="hidden" value="1">
-            <button type="submit">Registra iniezione</button>
-          </form>
-          <form id="quickWorkoutForm" class="panel form-panel">
-            <h2>Allenamento</h2>
-            <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
-            <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
-            <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
-            <button type="submit">Salva allenamento</button>
-          </form>
-          <form id="quickGoalForm" class="panel form-panel">
-            <h2>Target</h2>
-            <label>Metrica <select name="metric_key"></select></label>
-            <label>Target <input name="target_value" type="number" step="0.1" required></label>
-            <label>Data target <input name="target_date" type="date"></label>
-            <button type="submit">Aggiorna target</button>
-          </form>
-        </div>
+        </dialog>
       </section>
 
       <section id="riepilogo" class="view active-view" aria-labelledby="pageTitle">
@@ -126,8 +177,8 @@ use App\Support\Env;
       </section>
 
       <section id="iniezioni" class="view">
-        <div class="two-column">
-          <form id="injectionForm" class="panel form-panel">
+        <div class="injection-layout">
+          <form id="injectionForm" class="panel form-panel horizontal-form">
             <h2>Programma iniezione</h2>
             <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
             <div class="split-fields">
@@ -139,9 +190,11 @@ use App\Support\Env;
             <label>Note <textarea name="notes" rows="3"></textarea></label>
             <button type="submit">Programma calendario</button>
           </form>
-          <div class="panel">
+          <div class="panel measurements-panel">
             <h2>Storico</h2>
-            <div id="injectionList" class="timeline"></div>
+            <div class="table-wrap">
+              <table id="injectionTable" class="data-table"></table>
+            </div>
           </div>
         </div>
       </section>

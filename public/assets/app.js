@@ -109,10 +109,15 @@ function card(label, value, delta = '', accent = 'var(--teal)', icon = '') {
 async function loadDashboard() {
   const data = await api('dashboard');
   const summary = data.metric_summary || {};
+  const [pesoResults, bmiResults, fatResults] = await Promise.all([
+    api(`results&metric=peso&range=${state.range}${rangeQuery()}`),
+    api(`results&metric=bmi&range=${state.range}${rangeQuery()}`),
+    api(`results&metric=massa_grassa&range=${state.range}${rangeQuery()}`)
+  ]);
   $('#dashboardCards').innerHTML = [
-    metricRow('Peso', 'peso', summary.peso, 'var(--teal)'),
-    metricRow('BMI', 'bmi', summary.bmi, 'var(--teal)'),
-    metricRow('Massa grassa', 'massa_grassa', summary.massa_grassa, 'var(--coral)'),
+    metricRow('Peso', 'peso', summary.peso, pesoResults.kpi || {}, 'var(--teal)'),
+    metricRow('BMI', 'bmi', summary.bmi, bmiResults.kpi || {}, 'var(--teal)'),
+    metricRow('Massa grassa', 'massa_grassa', summary.massa_grassa, fatResults.kpi || {}, 'var(--coral)'),
     '<div class="metric-grid">',
     card('Dose GLP-1 attuale', data.next_injection ? `${fmt.format(data.next_injection.planned_dose_mg)} mg` : 'N/D', 'Prossima programmata', 'var(--violet)', 'syringe'),
     card('Prossima iniezione', data.next_injection ? dateTime(data.next_injection.scheduled_at) : 'Nessuna', '', 'var(--violet)', 'calendar'),
@@ -120,19 +125,22 @@ async function loadDashboard() {
     card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)', 'dumbbell'),
     '</div>'
   ].join('');
-  drawMetricChart('overviewChart', await api(`results&metric=peso&range=${state.range}${rangeQuery()}`), 'Peso');
+  drawMetricChart('overviewChart', pesoResults, 'Peso');
 }
 
-function metricRow(title, metric, data = {}, accent = 'var(--teal)') {
+function metricRow(title, metric, data = {}, kpi = {}, accent = 'var(--teal)') {
   const unit = metricUnits[metric] || '';
   const current = formatMetricValue(data.current, metric);
   const target = formatMetricValue(data.target, metric);
   const delta = formatSignedMetricValue(data.target_delta, metric);
-  const change = formatSignedMetricValue(data.change_7d, metric);
-  return `<section class="dashboard-metric-row" aria-label="${title}">
-    ${card(`${title} corrente`, current, change !== 'N/D' ? `${change} vs 7 giorni fa` : 'vs 7 giorni fa', accent, metricIcon(metric))}
+  const start = formatMetricValue(kpi.valore_iniziale ?? data.initial, metric);
+  const percent = formatKpi('variazione_percentuale', kpi.variazione_percentuale, metric);
+  const weekly = formatSignedMetricValue(kpi.media_settimanale, metric);
+  return `<section class="dashboard-metric-row four" aria-label="${title}">
+    ${card(`${title} corrente`, current, `Partenza ${start} · ${percent}`, accent, metricIcon(metric))}
     ${card(`${title} target`, target, data.target === null || data.target === undefined ? 'Imposta un obiettivo' : 'Obiettivo attivo', accent, metricIcon(metric))}
     ${card('Delta da target', delta, delta !== 'N/D' && unit === 'kg' ? 'kg da perdere' : 'Distanza obiettivo', accent, 'target')}
+    ${card(metric === 'peso' ? 'Perdita settimanale' : 'Variazione settimanale', weekly, 'Media sul periodo selezionato', accent, 'chart')}
   </section>`;
 }
 
@@ -161,12 +169,47 @@ function drawMetricChart(canvasId, data, label) {
 
 async function loadInjections() {
   const rows = await api('injections');
-  $('#injectionList').innerHTML = rows.map(r => `<div class="timeline-item"><strong>${r.medication_name}</strong><br>${fmt.format(r.planned_dose_mg)} mg · ${dateTime(r.scheduled_at)}<br><span class="muted">${statusIt(r.status)}</span> ${r.status === 'scheduled' ? `<button data-complete="${r.id}">Segna come effettuata</button>` : ''}</div>`).join('') || '<p class="muted">Nessuna iniezione registrata.</p>';
+  $('#injectionTable').innerHTML = renderInjectionTable(rows);
+  makeSortable($('#injectionTable'));
   document.querySelectorAll('[data-complete]').forEach(btn => btn.addEventListener('click', async () => {
     await api(`injections/${btn.dataset.complete}/complete`, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
     loadInjections();
     loadDashboard();
   }));
+  document.querySelectorAll('[data-delete-injection]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Eliminare questa iniezione?')) return;
+    await api(`injections/${btn.dataset.deleteInjection}`, { method: 'DELETE', body: '{}' });
+    loadInjections();
+    loadDashboard();
+    if (state.active === 'calendario') loadCalendar();
+  }));
+}
+
+function renderInjectionTable(rows) {
+  const head = `<thead><tr>
+    <th data-sort="text">Farmaco</th>
+    <th data-sort="number">Dosaggio</th>
+    <th data-sort="date">Data</th>
+    <th data-sort="text">Ora</th>
+    <th data-sort="text">Stato</th>
+    <th>Azioni</th>
+  </tr></thead>`;
+  const body = rows.map(row => {
+    const scheduled = new Date(row.scheduled_at.replace(' ', 'T'));
+    const status = statusIt(row.status);
+    return `<tr>
+      <td>${row.medication_name}</td>
+      <td data-value="${Number(row.planned_dose_mg)}">${fmt.format(row.planned_dose_mg)} mg</td>
+      <td data-value="${row.scheduled_at}">${dateOnly(row.scheduled_at)}</td>
+      <td>${timeOnly(scheduled)}</td>
+      <td>${status}</td>
+      <td class="row-actions">
+        ${row.status === 'scheduled' ? `<button type="button" data-complete="${row.id}">Segna effettuata</button>` : ''}
+        <button type="button" class="danger-button" data-delete-injection="${row.id}">Cancella</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `${head}<tbody>${body || '<tr><td colspan="6">Nessuna iniezione registrata.</td></tr>'}</tbody>`;
 }
 
 async function loadCalendar() {
@@ -210,6 +253,11 @@ function setupLoginForm() {
 function setupAppForms() {
   $('#sidebarToggle').addEventListener('click', toggleSidebar);
   $('#logoutBtn').addEventListener('click', async () => { await api('auth/logout', { method: 'POST', body: '{}' }); location.reload(); });
+  document.querySelectorAll('[data-dialog]').forEach(btn => btn.addEventListener('click', () => {
+    loadEntryDefaults();
+    document.getElementById(btn.dataset.dialog)?.showModal();
+  }));
+  document.querySelectorAll('[data-close-dialog]').forEach(btn => btn.addEventListener('click', () => btn.closest('dialog')?.close()));
   $('#injectionForm').addEventListener('submit', submitJson('injections', afterInjectionsSaved));
   $('#workoutForm').addEventListener('submit', submitJson('workouts', loadCalendar));
   $('#goalForm').addEventListener('submit', submitJson('goals', afterGoalSaved));
@@ -259,6 +307,7 @@ function submitJson(path, after) {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
     const result = await api(path, { method: 'POST', body: JSON.stringify(body) });
+    e.target.closest('dialog')?.close();
     e.target.reset();
     after(result, e.target);
   };
@@ -305,6 +354,16 @@ function populateControls() {
   $('#quickGoalForm select[name="metric_key"]').innerHTML = metricOptions;
   $('#metricSelect').addEventListener('change', e => { state.metric = e.target.value; loadResults(); });
   const ranges = [['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
+  $('#topRangeTabs').innerHTML = [...ranges, ['custom', 'Da/A']].map(([k, v]) => `<button type="button" data-top-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
+  document.querySelectorAll('[data-top-range]').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.topRange !== 'custom') {
+      state.range = btn.dataset.topRange;
+      applyPresetRange(state.range);
+    }
+    setRangeButtonState(btn.dataset.topRange || 'custom');
+    loadDashboard();
+    if (state.active === 'risultati') loadResults();
+  }));
   $('#rangeTabs').innerHTML = ranges.map(([k, v]) => `<button data-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
   document.querySelectorAll('[data-range]').forEach(btn => btn.addEventListener('click', () => {
     state.range = btn.dataset.range;
@@ -337,6 +396,7 @@ async function loadEntryDefaults() {
 function updateDateRange() {
   state.rangeStart = $('#rangeStart').value;
   state.rangeEnd = $('#rangeEnd').value;
+  setRangeButtonState('custom');
   loadDashboard();
   if (state.active === 'risultati') loadResults();
 }
@@ -348,11 +408,18 @@ function applyPresetRange(range) {
   if (range === '3m') start.setMonth(start.getMonth() - 3);
   if (range === '6m') start.setMonth(start.getMonth() - 6);
   if (range === '1y') start.setFullYear(start.getFullYear() - 1);
-  if (range === 'all') start.setFullYear(2020, 0, 1);
+  if (range === 'all') start.setFullYear(1970, 0, 1);
   state.rangeStart = isoDate(start);
   state.rangeEnd = isoDate(end);
   $('#rangeStart').value = state.rangeStart;
   $('#rangeEnd').value = state.rangeEnd;
+  $('#dashboardRange').value = range;
+  setRangeButtonState(range);
+}
+
+function setRangeButtonState(activeRange) {
+  document.querySelectorAll('[data-top-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.topRange === activeRange));
+  document.querySelectorAll('[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === state.range && activeRange !== 'custom'));
 }
 
 function rangeQuery() {
@@ -372,18 +439,53 @@ async function loadMeasurementsTable() {
   const rows = await api('measurements&limit=500');
   $('#measurementsTable').hidden = false;
   $('#measurementsTable').innerHTML = renderMeasurementsTable(rows);
+  makeSortable($('#measurementsTable'));
   $('#measurementsStatus').textContent = `${rows.length} misurazioni visualizzate. Le modifiche aggiornano anche la deduplica.`;
   document.querySelectorAll('[data-save-measurement]').forEach(btn => btn.addEventListener('click', saveMeasurementRow));
   document.querySelectorAll('[data-delete-measurement]').forEach(btn => btn.addEventListener('click', deleteMeasurementRow));
 }
 
 function renderMeasurementsTable(rows) {
-  const head = `<thead><tr>${measurementColumns.map(([, label]) => `<th>${label}</th>`).join('')}<th>Azioni</th></tr></thead>`;
+  const head = `<thead><tr>${measurementColumns.map(([key, label, type]) => `<th data-sort="${type === 'number' ? 'number' : type === 'datetime-local' ? 'date' : 'text'}">${label}</th>`).join('')}<th>Azioni</th></tr></thead>`;
   const body = rows.map(row => `<tr data-measurement-row="${row.id}">
     ${measurementColumns.map(([key, label, type]) => `<td><input aria-label="${label}" name="${key}" type="${type}" step="0.1" value="${inputValue(row[key], type)}"></td>`).join('')}
     <td class="row-actions"><button type="button" data-save-measurement="${row.id}">Salva</button><button type="button" class="danger-button" data-delete-measurement="${row.id}">Elimina</button></td>
   </tr>`).join('');
   return `${head}<tbody>${body || '<tr><td colspan="21">Nessuna misurazione importata.</td></tr>'}</tbody>`;
+}
+
+function makeSortable(table) {
+  if (!table) return;
+  table.querySelectorAll('th[data-sort]').forEach((th, index) => {
+    th.tabIndex = 0;
+    th.addEventListener('click', () => sortTable(table, index, th.dataset.sort || 'text', th));
+    th.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') sortTable(table, index, th.dataset.sort || 'text', th); });
+  });
+}
+
+function sortTable(table, columnIndex, type, th) {
+  const tbody = table.tBodies[0];
+  if (!tbody) return;
+  const direction = th.dataset.direction === 'asc' ? 'desc' : 'asc';
+  table.querySelectorAll('th').forEach(header => delete header.dataset.direction);
+  th.dataset.direction = direction;
+  const rows = [...tbody.rows];
+  rows.sort((a, b) => {
+    const av = sortableCellValue(a.cells[columnIndex], type);
+    const bv = sortableCellValue(b.cells[columnIndex], type);
+    if (av < bv) return direction === 'asc' ? -1 : 1;
+    if (av > bv) return direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+  rows.forEach(row => tbody.appendChild(row));
+}
+
+function sortableCellValue(cell, type) {
+  const input = cell?.querySelector('input, select, textarea');
+  const raw = cell?.dataset.value ?? input?.value ?? cell?.textContent ?? '';
+  if (type === 'number') return Number(String(raw).replace(',', '.')) || 0;
+  if (type === 'date') return new Date(String(raw).replace(' ', 'T')).getTime() || 0;
+  return String(raw).trim().toLocaleLowerCase('it-IT');
 }
 
 async function saveMeasurementRow(event) {
@@ -438,6 +540,8 @@ async function loadSharedImport() {
 }
 
 function dateTime(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T'))) : ''; }
+function dateOnly(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value.replace(' ', 'T'))) : ''; }
+function timeOnly(date) { return date instanceof Date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(date) : ''; }
 function shortDate(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' }).format(new Date(value.replace(' ', 'T'))) : ''; }
 function dateIt(value) { return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`)); }
 function labelize(key, metric = state.metric) {
