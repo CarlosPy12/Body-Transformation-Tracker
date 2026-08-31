@@ -66,6 +66,20 @@ test_case('Parser passi: somma righe e ignora righe invalide', function (): void
 test_case('Parser passi: ignora aggregati settimanali e mensili', function (): void {
     assert_true(!StepsCsvParser::isDailyFile('Passi 33-2026 Huawei Health.csv'), 'Aggregato settimanale accettato');
     assert_true(!StepsCsvParser::isDailyFile('Passi Luglio 2026 Huawei Health.csv'), 'Aggregato mensile accettato');
+    assert_true(!StepsCsvParser::isDailyFile('Passi 2026.07.31-2026.08.30 Health Connect.csv'), 'Aggregato continuo 30 giorni accettato');
+});
+
+test_case('Parser passi: accetta file giornalieri Huawei Health e Health Connect', function (): void {
+    assert_true(StepsCsvParser::isDailyFile('Passi 2026.08.31 Huawei Health.csv'), 'Giornaliero Huawei rifiutato');
+    assert_true(StepsCsvParser::isDailyFile('Passi 2026.08.31 Health Connect.csv'), 'Giornaliero Health Connect rifiutato');
+    assert_true(StepsCsvParser::dateFromFileName('Passi 2026.08.31 Health Connect.csv') === '2026-08-31', 'Data file Health Connect errata');
+});
+
+test_case('Parser passi: supporta CSV con due colonne data e passi', function (): void {
+    $csv = "Data,Passi\n2026.08.31 09:00:00,10\n2026.08.31 10:00:00,52";
+    $parsed = (new StepsCsvParser())->parse('Passi 2026.08.31 Health Connect.csv', $csv);
+    assert_true($parsed['date'] === '2026-08-31', 'Data passi due colonne errata');
+    assert_true($parsed['steps'] === 62, 'Somma passi due colonne errata');
 });
 
 test_case('Authorization: user non accede ad altri utenti', function (): void {

@@ -79,6 +79,8 @@ Se Composer non e disponibile sul server, la workflow accetta `vendor/autoload.p
 
 Il parser cerca l'header `Data;Ora;kg;IMC;...` anche se non si trova nella prima riga. I decimali italiani vengono convertiti per MySQL, i campi vuoti restano `NULL`, e la deduplica usa `UNIQUE(user_id, measurement_hash)`.
 
+Se il CSV esportato dalla bilancia contiene tutto lo storico, l'import resta append-only: per ogni utente vengono analizzate e importate solo le righe con data successiva all'ultima misurazione gia presente. Le date vecchie o gia consolidate vengono saltate e non modificano il database.
+
 Le anomalie sono warning basati sullo storico recente dell'utente e sulla soglia relativa configurabile `ANOMALY_RELATIVE_THRESHOLD`.
 
 ## Share Target Android
@@ -90,10 +92,18 @@ Il manifest espone la PWA come destinazione di condivisione per CSV. I file rice
 Il cron `cron/sync_steps.php` processa solo file con nome:
 
 ```regex
-^Passi \d{4}\.\d{2}\.\d{2} Huawei Health\.csv$
+^Passi \d{4}\.\d{2}\.\d{2} (Huawei Health|Health Connect)\.csv$
 ```
 
-Somma la colonna `Passi` e fa UPSERT in `daily_steps`, mantenendo una sola riga per `user_id + step_date`.
+Questo esclude i riepiloghi settimanali, mensili e continui di 30 giorni. Somma la colonna `Passi` e fa UPSERT in `daily_steps`, mantenendo una sola riga per `user_id + step_date`.
+
+Per evitare import storici imposta nel `.env`:
+
+```env
+STEPS_SYNC_START_DATE=2026-09-01
+```
+
+Se `STEPS_SYNC_START_DATE` non e configurata, il cron processa solo file dalla data corrente in avanti.
 
 ## Import storico passi da CSV
 

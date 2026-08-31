@@ -277,12 +277,12 @@ function setupAppForms() {
     e.preventDefault();
     const form = new FormData(e.target);
     const data = await api('imports/preview', { method: 'POST', body: form });
-    $('#importPreview').innerHTML = `<p>${data.rows_found} righe trovate, ${data.rows_flagged} da verificare.</p><button id="confirmImport">Conferma importazione</button>`;
+    $('#importPreview').innerHTML = `<p>${data.rows_found} righe nel CSV · ${data.rows_importable} nuove da importare · ${data.rows_skipped_existing_period} già consolidate${data.latest_existing_measurement_date ? ` fino al ${dateIt(data.latest_existing_measurement_date)}` : ''} · ${data.rows_flagged} da verificare.</p><button id="confirmImport">Conferma importazione</button>`;
     $('#confirmImport').onclick = async () => {
       const confirmForm = new FormData(e.target);
       confirmForm.append('accepted_hashes', JSON.stringify(data.preview.filter(r => r.flagged).map(r => r.measurement_hash)));
       const done = await api('imports/confirm', { method: 'POST', body: confirmForm });
-      $('#importPreview').innerHTML = `<p>${done.rows_found} righe trovate · ${done.rows_imported} importate · ${done.rows_duplicates} duplicati · ${done.rows_rejected} ignorate.</p>`;
+      $('#importPreview').innerHTML = `<p>${done.rows_found} righe nel CSV · ${done.rows_imported} importate · ${done.rows_skipped_existing_period} già consolidate · ${done.rows_duplicates} duplicati · ${done.rows_rejected} ignorate.</p>`;
       loadResults();
       loadDashboard();
     };
@@ -557,7 +557,7 @@ async function loadSharedImport() {
     $('#importPreview').innerHTML = `<p>CSV condiviso ricevuto: ${data.rows_found} righe trovate, ${data.rows_flagged} da verificare.</p><button id="confirmSharedImport">Conferma importazione</button>`;
     $('#confirmSharedImport').onclick = async () => {
       const done = await api('imports/shared-confirm', { method: 'POST', body: JSON.stringify({ accepted_hashes: data.preview.filter(r => r.flagged).map(r => r.measurement_hash) }) });
-      $('#importPreview').innerHTML = `<p>${done.rows_found} righe trovate · ${done.rows_imported} importate · ${done.rows_duplicates} duplicati · ${done.rows_rejected} ignorate.</p>`;
+      $('#importPreview').innerHTML = `<p>${done.rows_found} righe nel CSV · ${done.rows_imported} importate · ${done.rows_skipped_existing_period} già consolidate · ${done.rows_duplicates} duplicati · ${done.rows_rejected} ignorate.</p>`;
       loadDashboard();
       loadResults();
     };

@@ -1,4 +1,5 @@
 .env
+.codex-remote-attachments/
 /vendor/
 /storage/logs/*.log
 /storage/uploads/*

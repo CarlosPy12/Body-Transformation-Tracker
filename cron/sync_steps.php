@@ -13,6 +13,7 @@ use App\Sync\StepsSyncService;
 $pdo = Database::pdo();
 $folderId = Env::get('GOOGLE_DRIVE_STEPS_FOLDER_ID');
 $credentials = Env::get('GOOGLE_SERVICE_ACCOUNT_JSON_PATH');
+$syncStartDate = Env::get('STEPS_SYNC_START_DATE', date('Y-m-d'));
 
 if (!$folderId || !$credentials || !class_exists(Google\Client::class)) {
     Logger::write('sync', 'Google Drive non configurato o dipendenze Composer mancanti');
@@ -34,7 +35,8 @@ foreach ($users as $user) {
             'fields' => 'files(id,name,modifiedTime,md5Checksum)',
         ]);
         foreach ($files->getFiles() as $file) {
-            if (!StepsCsvParser::isDailyFile($file->getName())) {
+            $fileDate = StepsCsvParser::dateFromFileName($file->getName());
+            if ($fileDate === null || $fileDate < $syncStartDate) {
                 continue;
             }
             try {
