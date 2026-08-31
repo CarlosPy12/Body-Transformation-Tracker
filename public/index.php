@@ -36,7 +36,16 @@ use App\Support\Env;
 
   <div id="appShell" class="app-shell" hidden>
     <aside class="sidebar" aria-label="Navigazione principale">
-      <div class="brand-row"><span class="brand-mark">BT</span><strong>Body Tracker</strong></div>
+      <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Comprimi menu" aria-expanded="true">‹</button>
+      <div class="brand-row">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" focusable="false">
+            <circle cx="24" cy="24" r="18"></circle>
+            <path d="M10 25h8l4-10 8 20 5-13 3 3h5"></path>
+          </svg>
+        </span>
+        <strong>Body Tracker</strong>
+      </div>
       <nav id="sideNav"></nav>
       <button id="logoutBtn" class="ghost-button">Esci</button>
     </aside>
@@ -101,6 +110,19 @@ use App\Support\Env;
             <button type="submit">Analizza</button>
           </form>
           <div id="importPreview"></div>
+        </section>
+        <section class="panel measurements-panel">
+          <div class="section-head">
+            <div>
+              <h2>Misurazioni</h2>
+              <p class="muted">Visualizza, correggi o cancella le rilevazioni importate.</p>
+            </div>
+            <button id="loadMeasurementsBtn" class="ghost-button" type="button">Visualizza tabella</button>
+          </div>
+          <div id="measurementsStatus" class="muted"></div>
+          <div class="table-wrap">
+            <table id="measurementsTable" class="data-table" hidden></table>
+          </div>
         </section>
       </section>
 

@@ -9,6 +9,7 @@ use App\Auth\Authorization;
 use App\Repositories\MeasurementRepository;
 use App\Services\ImportService;
 use App\Services\ResultsService;
+use App\Import\MeasurementFingerprint;
 use App\Support\Database;
 use App\Support\Response;
 
@@ -83,6 +84,58 @@ try {
 
     if ($path === 'results') {
         Response::ok((new ResultsService($pdo))->metric((int) $user['id'], (string) ($_GET['metric'] ?? 'peso'), (string) ($_GET['range'] ?? '3m')));
+        return;
+    }
+
+    if ($path === 'measurements' && $method === 'GET') {
+        $limit = min(500, max(25, (int) ($_GET['limit'] ?? 250)));
+        $stmt = $pdo->prepare('SELECT * FROM body_measurements WHERE user_id = ? ORDER BY measured_at DESC, id DESC LIMIT ' . $limit);
+        $stmt->execute([$user['id']]);
+        Response::ok($stmt->fetchAll());
+        return;
+    }
+
+    if (preg_match('#^measurements/(\d+)$#', $path, $m) && $method === 'PUT') {
+        require_csrf($auth);
+        $measurementId = (int) $m[1];
+        $existing = $pdo->prepare('SELECT * FROM body_measurements WHERE id = ? AND user_id = ? LIMIT 1');
+        $existing->execute([$measurementId, $user['id']]);
+        $row = $existing->fetch();
+        if (!$row) {
+            Response::fail('NOT_FOUND', 'Misurazione non trovata.', 404);
+            return;
+        }
+
+        $fields = measurement_fields();
+        $updated = ['measured_at' => normalize_measured_at((string) ($input['measured_at'] ?? $row['measured_at']))];
+        foreach ($fields as $field) {
+            $updated[$field] = decimal_or_null($input[$field] ?? null);
+        }
+        $updated['measurement_hash'] = MeasurementFingerprint::hash((int) $user['id'], $updated);
+
+        $assignments = array_map(static fn (string $field): string => "{$field} = ?", array_merge(['measured_at'], $fields, ['measurement_hash']));
+        $sql = 'UPDATE body_measurements SET ' . implode(', ', $assignments) . ', source = IF(source = "manual", "manual", source), updated_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?';
+        $values = [];
+        foreach (array_merge(['measured_at'], $fields, ['measurement_hash']) as $field) {
+            $values[] = $updated[$field];
+        }
+        $values[] = $measurementId;
+        $values[] = $user['id'];
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($values);
+            Response::ok(['updated' => $stmt->rowCount(), 'measurement_hash' => $updated['measurement_hash']]);
+        } catch (PDOException $e) {
+            Response::fail('DUPLICATE_MEASUREMENT', 'Esiste già una misurazione identica per questo utente.', 409);
+        }
+        return;
+    }
+
+    if (preg_match('#^measurements/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        require_csrf($auth);
+        $stmt = $pdo->prepare('DELETE FROM body_measurements WHERE id = ? AND user_id = ?');
+        $stmt->execute([(int) $m[1], $user['id']]);
+        Response::ok(['deleted' => $stmt->rowCount()]);
         return;
     }
 
@@ -258,4 +311,34 @@ try {
     Response::fail('NOT_FOUND', 'Endpoint non trovato.', 404);
 } catch (Throwable $e) {
     Response::fail('SERVER_ERROR', $e->getMessage(), 500);
+}
+
+function measurement_fields(): array
+{
+    return [
+        'weight_kg', 'bmi', 'body_fat', 'body_water', 'muscle', 'bone',
+        'left_arm_body_fat', 'left_arm_muscle', 'right_arm_body_fat', 'right_arm_muscle',
+        'left_leg_body_fat', 'left_leg_muscle', 'right_leg_body_fat', 'right_leg_muscle',
+        'trunk_body_fat', 'trunk_muscle', 'metabolic_age', 'heart_rate_bpm', 'visceral_fat',
+    ];
+}
+
+function decimal_or_null(mixed $value): ?float
+{
+    if ($value === null || trim((string) $value) === '') {
+        return null;
+    }
+    return (float) str_replace(',', '.', (string) $value);
+}
+
+function normalize_measured_at(string $value): string
+{
+    $value = trim($value);
+    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $value)) {
+        return str_replace('T', ' ', $value) . ':00';
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $value)) {
+        return $value . ':00';
+    }
+    return $value;
 }

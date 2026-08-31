@@ -1,10 +1,10 @@
-const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', metric: 'peso', charts: {}, deferredInstall: null };
+const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', metric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
 const sections = [
-  ['riepilogo', 'Riepilogo', '⌂'],
-  ['iniezioni', 'Iniezioni', '⌁'],
-  ['risultati', 'Risultati', '▥'],
-  ['calendario', 'Calendario', '□'],
-  ['impostazioni', 'Impostazioni', '⚙']
+  ['riepilogo', 'Riepilogo', 'home'],
+  ['iniezioni', 'Iniezioni', 'syringe'],
+  ['risultati', 'Risultati', 'chart'],
+  ['calendario', 'Calendario', 'calendar'],
+  ['impostazioni', 'Impostazioni', 'settings']
 ];
 const metrics = {
   peso: 'Peso', bmi: 'BMI', massa_grassa: 'Massa grassa', acqua: 'Acqua', muscoli: 'Muscoli', ossa: 'Ossa',
@@ -15,6 +15,33 @@ const metrics = {
   gamba_dx_massa_grassa: 'Gamba DX - massa grassa', gamba_dx_muscoli: 'Gamba DX - muscoli',
   tronco_massa_grassa: 'Tronco - massa grassa', tronco_muscoli: 'Tronco - muscoli', passi: 'Passi'
 };
+const metricUnits = {
+  peso: 'kg', bmi: '', massa_grassa: '%', acqua: '%', muscoli: '', ossa: '', grasso_viscerale: '',
+  eta_metabolica: 'anni', battito: 'bpm', braccio_sx_massa_grassa: '%', braccio_dx_massa_grassa: '%',
+  gamba_sx_massa_grassa: '%', gamba_dx_massa_grassa: '%', tronco_massa_grassa: '%', passi: 'passi'
+};
+const measurementColumns = [
+  ['measured_at', 'Data e ora', 'datetime-local'],
+  ['weight_kg', 'Peso (kg)', 'number'],
+  ['bmi', 'BMI', 'number'],
+  ['body_fat', 'Massa grassa (%)', 'number'],
+  ['body_water', 'Acqua (%)', 'number'],
+  ['muscle', 'Muscoli', 'number'],
+  ['bone', 'Ossa', 'number'],
+  ['visceral_fat', 'Grasso viscerale', 'number'],
+  ['metabolic_age', 'Età metabolica', 'number'],
+  ['heart_rate_bpm', 'Battito (bpm)', 'number'],
+  ['left_arm_body_fat', 'Braccio SX grasso', 'number'],
+  ['left_arm_muscle', 'Braccio SX muscoli', 'number'],
+  ['right_arm_body_fat', 'Braccio DX grasso', 'number'],
+  ['right_arm_muscle', 'Braccio DX muscoli', 'number'],
+  ['left_leg_body_fat', 'Gamba SX grasso', 'number'],
+  ['left_leg_muscle', 'Gamba SX muscoli', 'number'],
+  ['right_leg_body_fat', 'Gamba DX grasso', 'number'],
+  ['right_leg_muscle', 'Gamba DX muscoli', 'number'],
+  ['trunk_body_fat', 'Tronco grasso', 'number'],
+  ['trunk_muscle', 'Tronco muscoli', 'number']
+];
 
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
 const fmtInt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
@@ -43,7 +70,7 @@ async function api(path, options = {}) {
 }
 
 function initNav() {
-  const markup = sections.map(([id, label, icon]) => `<button class="nav-button ${id === state.active ? 'active' : ''}" data-view="${id}" aria-label="${label}"><span>${icon}</span><span>${label}</span></button>`).join('');
+  const markup = sections.map(([id, label, icon]) => `<button class="nav-button ${id === state.active ? 'active' : ''}" data-view="${id}" aria-label="${label}"><span class="nav-icon">${iconSvg(icon)}</span><span class="nav-label">${label}</span></button>`).join('');
   $('#sideNav').innerHTML = markup;
   $('#bottomNav').innerHTML = markup;
   document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
@@ -83,7 +110,7 @@ async function loadDashboard() {
 async function loadResults() {
   const data = await api(`results&metric=${state.metric}&range=${state.range}`);
   $('#resultChartTitle').textContent = metrics[state.metric];
-  $('#resultKpis').innerHTML = Object.entries(data.kpi || {}).map(([key, value]) => card(labelize(key), typeof value === 'number' ? fmt.format(value) : 'N/D')).join('');
+  $('#resultKpis').innerHTML = Object.entries(data.kpi || {}).map(([key, value]) => card(labelize(key), formatKpi(key, value, state.metric))).join('');
   drawMetricChart('resultChart', data, metrics[state.metric]);
 }
 
@@ -150,6 +177,7 @@ function setupLoginForm() {
 }
 
 function setupAppForms() {
+  $('#sidebarToggle').addEventListener('click', toggleSidebar);
   $('#logoutBtn').addEventListener('click', async () => { await api('auth/logout', { method: 'POST', body: '{}' }); location.reload(); });
   $('#injectionForm').addEventListener('submit', submitJson('injections', loadInjections));
   $('#workoutForm').addEventListener('submit', submitJson('workouts', loadCalendar));
@@ -169,8 +197,17 @@ function setupAppForms() {
     };
   });
   $('#pushBtn').addEventListener('click', subscribePush);
+  $('#loadMeasurementsBtn').addEventListener('click', loadMeasurementsTable);
   $('#monthPicker').addEventListener('change', loadCalendar);
   $('#dashboardRange').addEventListener('change', loadDashboard);
+}
+
+function toggleSidebar() {
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  document.body.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+  $('#sidebarToggle').textContent = state.sidebarCollapsed ? '›' : '‹';
+  $('#sidebarToggle').setAttribute('aria-label', state.sidebarCollapsed ? 'Espandi menu' : 'Comprimi menu');
+  $('#sidebarToggle').setAttribute('aria-expanded', String(!state.sidebarCollapsed));
 }
 
 function submitJson(path, after) {
@@ -206,6 +243,45 @@ function populateControls() {
   }));
 }
 
+async function loadMeasurementsTable() {
+  $('#measurementsStatus').textContent = 'Caricamento misurazioni...';
+  const rows = await api('measurements&limit=500');
+  $('#measurementsTable').hidden = false;
+  $('#measurementsTable').innerHTML = renderMeasurementsTable(rows);
+  $('#measurementsStatus').textContent = `${rows.length} misurazioni visualizzate. Le modifiche aggiornano anche la deduplica.`;
+  document.querySelectorAll('[data-save-measurement]').forEach(btn => btn.addEventListener('click', saveMeasurementRow));
+  document.querySelectorAll('[data-delete-measurement]').forEach(btn => btn.addEventListener('click', deleteMeasurementRow));
+}
+
+function renderMeasurementsTable(rows) {
+  const head = `<thead><tr>${measurementColumns.map(([, label]) => `<th>${label}</th>`).join('')}<th>Azioni</th></tr></thead>`;
+  const body = rows.map(row => `<tr data-measurement-row="${row.id}">
+    ${measurementColumns.map(([key, label, type]) => `<td><input aria-label="${label}" name="${key}" type="${type}" step="0.1" value="${inputValue(row[key], type)}"></td>`).join('')}
+    <td class="row-actions"><button type="button" data-save-measurement="${row.id}">Salva</button><button type="button" class="danger-button" data-delete-measurement="${row.id}">Elimina</button></td>
+  </tr>`).join('');
+  return `${head}<tbody>${body || '<tr><td colspan="21">Nessuna misurazione importata.</td></tr>'}</tbody>`;
+}
+
+async function saveMeasurementRow(event) {
+  const id = event.currentTarget.dataset.saveMeasurement;
+  const row = document.querySelector(`[data-measurement-row="${id}"]`);
+  const payload = Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.name, input.value]));
+  await api(`measurements/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  $('#measurementsStatus').textContent = 'Misurazione salvata.';
+  loadDashboard();
+  loadResults();
+}
+
+async function deleteMeasurementRow(event) {
+  const id = event.currentTarget.dataset.deleteMeasurement;
+  if (!confirm('Eliminare questa misurazione? L’operazione non può essere annullata.')) return;
+  await api(`measurements/${id}`, { method: 'DELETE', body: '{}' });
+  document.querySelector(`[data-measurement-row="${id}"]`)?.remove();
+  $('#measurementsStatus').textContent = 'Misurazione eliminata.';
+  loadDashboard();
+  loadResults();
+}
+
 function boot(data) {
   state.user = data.user;
   state.csrf = data.csrf_token;
@@ -238,7 +314,44 @@ async function loadSharedImport() {
 function dateTime(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value.replace(' ', 'T'))) : ''; }
 function shortDate(value) { return value ? new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' }).format(new Date(value.replace(' ', 'T'))) : ''; }
 function dateIt(value) { return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`)); }
-function labelize(key) { return key.replaceAll('_', ' '); }
+function labelize(key) {
+  return ({
+    valore_corrente: 'Valore corrente',
+    valore_iniziale: 'Valore iniziale',
+    variazione_totale: 'Variazione totale',
+    variazione_percentuale: 'Variazione percentuale',
+    media_periodo: 'Media nel periodo',
+    media_giornaliera: 'Media giornaliera',
+    totale_periodo: 'Totale periodo',
+    giorni_sopra_obiettivo: 'Giorni sopra obiettivo',
+    percentuale_giorni_target: 'Giorni target raggiunto',
+    minimo: 'Minimo',
+    massimo: 'Massimo'
+  })[key] || key.replaceAll('_', ' ');
+}
+function formatKpi(key, value, metric) {
+  if (typeof value !== 'number') return 'N/D';
+  const unit = metricUnits[metric] || '';
+  const prefix = key.includes('variazione') && value > 0 ? '+' : '';
+  if (key.includes('percentuale')) return `${prefix}${fmt.format(value)} %`;
+  if (metric === 'passi' || key.includes('giorni') || key.includes('totale_periodo')) return `${fmtInt.format(value)}${unit === 'passi' ? ' passi' : ''}`;
+  return `${prefix}${fmt.format(value)}${unit ? ` ${unit}` : ''}`;
+}
+function inputValue(value, type) {
+  if (value === null || value === undefined) return '';
+  if (type === 'datetime-local') return String(value).slice(0, 16).replace(' ', 'T');
+  return value;
+}
+function iconSvg(name) {
+  const icons = {
+    home: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg>',
+    syringe: '<svg viewBox="0 0 24 24"><path d="m18 2 4 4"></path><path d="m17 7 2-2"></path><path d="M4 20l7-7"></path><path d="m9 11 4 4 6-6-4-4-6 6Z"></path><path d="m5 19 3 3"></path></svg>',
+    chart: '<svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h17"></path><path d="M8 16v-5"></path><path d="M13 16V8"></path><path d="M18 16v-9"></path></svg>',
+    calendar: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path></svg>',
+    settings: '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .4 1.7 1.7 0 0 0-.5 1.4H9a1.7 1.7 0 0 0-.5-1.4 1.7 1.7 0 0 0-2-.4l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.2-1.1V10a1.7 1.7 0 0 0 1.2-1.1A1.7 1.7 0 0 0 4.4 7l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2-.4A1.7 1.7 0 0 0 9 1.8h6a1.7 1.7 0 0 0 .5 1.4 1.7 1.7 0 0 0 2 .4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 20.5 10v3.9a1.7 1.7 0 0 0-1.1 1.1Z"></path></svg>'
+  };
+  return icons[name] || '';
+}
 function statusIt(s) { return ({ scheduled: 'Programmata', completed: 'Effettuata', missed: 'Mancata', skipped: 'Saltata', cancelled: 'Annullata' })[s] || s; }
 function eventLabel(e) { return ({ misurazione: 'Misurazione corporea', iniezione: 'GLP-1', allenamento: 'Allenamento' })[e.type]; }
 function eventText(e) { if (e.type === 'misurazione') return `${fmt.format(e.weight_kg)} kg`; if (e.type === 'iniezione') return `${fmt.format(e.planned_dose_mg)} mg · ${statusIt(e.status)}`; return `${e.workout_type} · ${statusIt(e.status)}`; }
