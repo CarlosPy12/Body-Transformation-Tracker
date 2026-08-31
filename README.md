@@ -95,6 +95,33 @@ Il cron `cron/sync_steps.php` processa solo file con nome:
 
 Somma la colonna `Passi` e fa UPSERT in `daily_steps`, mantenendo una sola riga per `user_id + step_date`.
 
+## Import storico passi da CSV
+
+Per importare passi storici manualmente prepara un CSV con due colonne:
+
+```csv
+data,passi
+2026-08-01,8542
+2026-08-02,10120
+31/08/2026,7800
+```
+
+Sono accettati separatori `,` o `;`, date `YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY.MM.DD`, `DD.MM.YYYY`, e passi con separatore migliaia tipo `8.542`.
+
+Carica il file fuori da `public/`, per esempio in `storage/uploads/passi_storici.csv`, poi esegui:
+
+```bash
+php database/seeds/import_steps_csv.php --user-id=1 --file=/home2/b9g6c7m1/kinetica-repo/storage/uploads/passi_storici.csv
+```
+
+Per controllare il file senza scrivere nel database:
+
+```bash
+php database/seeds/import_steps_csv.php --user-id=1 --file=/home2/b9g6c7m1/kinetica-repo/storage/uploads/passi_storici.csv --dry-run
+```
+
+Lo script aggiorna una sola riga per giorno in `daily_steps`, quindi se rilanci lo stesso import corregge i valori esistenti invece di duplicarli.
+
 ## Sicurezza
 
 - Nessun secret e nessuna password nel repository.

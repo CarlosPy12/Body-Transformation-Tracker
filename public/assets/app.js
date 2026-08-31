@@ -92,8 +92,13 @@ function showView(id) {
   if (id === 'impostazioni') loadAdmin();
 }
 
-function card(label, value, delta = '', accent = 'var(--teal)') {
-  return `<article class="card" style="--accent:${accent}"><div class="label">${label}</div><div class="value">${value}</div><div class="delta">${delta}</div></article>`;
+function card(label, value, delta = '', accent = 'var(--teal)', icon = '') {
+  const iconMarkup = icon ? `<span class="card-icon" aria-hidden="true">${iconSvg(icon)}</span>` : '';
+  return `<article class="card metric-card" style="--accent:${accent}">
+    <div class="card-head">${iconMarkup}<div class="label">${label}</div></div>
+    <div class="value">${value}</div>
+    <div class="delta">${delta}</div>
+  </article>`;
 }
 
 async function loadDashboard() {
@@ -104,10 +109,10 @@ async function loadDashboard() {
     metricRow('BMI', 'bmi', summary.bmi, 'var(--teal)'),
     metricRow('Massa grassa', 'massa_grassa', summary.massa_grassa, 'var(--coral)'),
     '<div class="metric-grid">',
-    card('Dose GLP-1 attuale', data.next_injection ? `${fmt.format(data.next_injection.planned_dose_mg)} mg` : 'N/D', 'Prossima programmata', 'var(--violet)'),
-    card('Prossima iniezione', data.next_injection ? dateTime(data.next_injection.scheduled_at) : 'Nessuna', '', 'var(--violet)'),
-    card('Passi oggi', fmtInt.format(data.steps_today), 'Obiettivo 10.000', 'var(--teal)'),
-    card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)'),
+    card('Dose GLP-1 attuale', data.next_injection ? `${fmt.format(data.next_injection.planned_dose_mg)} mg` : 'N/D', 'Prossima programmata', 'var(--violet)', 'syringe'),
+    card('Prossima iniezione', data.next_injection ? dateTime(data.next_injection.scheduled_at) : 'Nessuna', '', 'var(--violet)', 'calendar'),
+    card('Passi oggi', fmtInt.format(data.steps_today), 'Obiettivo 10.000', 'var(--teal)', 'footsteps'),
+    card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)', 'dumbbell'),
     '</div>'
   ].join('');
   drawMetricChart('overviewChart', await api('results&metric=peso&range=3m'), 'Peso');
@@ -120,9 +125,9 @@ function metricRow(title, metric, data = {}, accent = 'var(--teal)') {
   const delta = formatSignedMetricValue(data.target_delta, metric);
   const change = formatSignedMetricValue(data.change_7d, metric);
   return `<section class="dashboard-metric-row" aria-label="${title}">
-    ${card(`${title} corrente`, current, change !== 'N/D' ? `${change} vs 7 giorni fa` : 'vs 7 giorni fa', accent)}
-    ${card(`${title} target`, target, data.target === null || data.target === undefined ? 'Imposta un obiettivo' : 'Obiettivo attivo', accent)}
-    ${card('Delta da target', delta, delta !== 'N/D' && unit === 'kg' ? 'kg da perdere' : 'Distanza obiettivo', accent)}
+    ${card(`${title} corrente`, current, change !== 'N/D' ? `${change} vs 7 giorni fa` : 'vs 7 giorni fa', accent, metricIcon(metric))}
+    ${card(`${title} target`, target, data.target === null || data.target === undefined ? 'Imposta un obiettivo' : 'Obiettivo attivo', accent, metricIcon(metric))}
+    ${card('Delta da target', delta, delta !== 'N/D' && unit === 'kg' ? 'kg da perdere' : 'Distanza obiettivo', accent, 'target')}
   </section>`;
 }
 
@@ -250,7 +255,8 @@ async function subscribePush() {
 }
 
 function populateControls() {
-  $('#metricSelect').innerHTML = Object.entries(metrics).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  const metricOptions = Object.entries(metrics).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('#metricSelect').innerHTML = metricOptions;
   $('#goalForm select[name="metric_key"]').innerHTML = $('#metricSelect').innerHTML;
   $('#metricSelect').addEventListener('change', e => { state.metric = e.target.value; loadResults(); });
   const ranges = [['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
@@ -367,6 +373,12 @@ function formatSignedMetricValue(value, metric) {
   const number = Number(value);
   return `${number > 0 ? '+' : ''}${fmt.format(number)}${unit ? ` ${unit}` : ''}`;
 }
+function metricIcon(metric) {
+  if (metric === 'peso') return 'weight';
+  if (metric === 'bmi') return 'bmi';
+  if (metric === 'massa_grassa') return 'fat';
+  return 'target';
+}
 function inputValue(value, type) {
   if (value === null || value === undefined) return '';
   if (type === 'datetime-local') return String(value).slice(0, 16).replace(' ', 'T');
@@ -378,7 +390,13 @@ function iconSvg(name) {
     syringe: '<svg viewBox="0 0 24 24"><path d="m18 2 4 4"></path><path d="m17 7 2-2"></path><path d="M4 20l7-7"></path><path d="m9 11 4 4 6-6-4-4-6 6Z"></path><path d="m5 19 3 3"></path></svg>',
     chart: '<svg viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h17"></path><path d="M8 16v-5"></path><path d="M13 16V8"></path><path d="M18 16v-9"></path></svg>',
     calendar: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path></svg>',
-    settings: '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .4 1.7 1.7 0 0 0-.5 1.4H9a1.7 1.7 0 0 0-.5-1.4 1.7 1.7 0 0 0-2-.4l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.2-1.1V10a1.7 1.7 0 0 0 1.2-1.1A1.7 1.7 0 0 0 4.4 7l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2-.4A1.7 1.7 0 0 0 9 1.8h6a1.7 1.7 0 0 0 .5 1.4 1.7 1.7 0 0 0 2 .4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 20.5 10v3.9a1.7 1.7 0 0 0-1.1 1.1Z"></path></svg>'
+    settings: '<svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .4 1.7 1.7 0 0 0-.5 1.4H9a1.7 1.7 0 0 0-.5-1.4 1.7 1.7 0 0 0-2-.4l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.2-1.1V10a1.7 1.7 0 0 0 1.2-1.1A1.7 1.7 0 0 0 4.4 7l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2-.4A1.7 1.7 0 0 0 9 1.8h6a1.7 1.7 0 0 0 .5 1.4 1.7 1.7 0 0 0 2 .4l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 20.5 10v3.9a1.7 1.7 0 0 0-1.1 1.1Z"></path></svg>',
+    weight: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="3"></rect><path d="M9 8.5a4 4 0 0 1 6 0"></path><path d="M12 8.5V11"></path></svg>',
+    bmi: '<svg viewBox="0 0 24 24"><path d="M12 3v18"></path><path d="M7 8h10"></path><path d="M6 15h12"></path><path d="M9 3h6"></path><path d="M8 21h8"></path></svg>',
+    fat: '<svg viewBox="0 0 24 24"><path d="M12 3c3 3.2 6 6.8 6 10.5a6 6 0 0 1-12 0C6 9.8 9 6.2 12 3Z"></path><path d="M9.5 13.5h5"></path><path d="M12 11v5"></path></svg>',
+    target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path></svg>',
+    footsteps: '<svg viewBox="0 0 24 24"><path d="M7.5 13.5c1.5 0 2.5 1.2 2.5 2.8 0 2-1.1 3.7-2.8 3.7-1.4 0-2.4-1.1-2.4-2.7 0-1.9 1-3.8 2.7-3.8Z"></path><path d="M16.5 4c1.5 0 2.5 1.2 2.5 2.8 0 2-1.1 3.7-2.8 3.7-1.4 0-2.4-1.1-2.4-2.7C13.8 5.9 14.8 4 16.5 4Z"></path></svg>',
+    dumbbell: '<svg viewBox="0 0 24 24"><path d="M6 7v10"></path><path d="M18 7v10"></path><path d="M3 9v6"></path><path d="M21 9v6"></path><path d="M6 12h12"></path></svg>'
   };
   return icons[name] || '';
 }

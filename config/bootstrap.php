@@ -23,7 +23,7 @@ if (is_file($autoload)) {
 Env::load(dirname(__DIR__) . '/.env');
 date_default_timezone_set(Env::get('APP_TIMEZONE', 'Europe/Rome'));
 
-if (PHP_SESSION_NONE === session_status()) {
+if (PHP_SAPI !== 'cli' && PHP_SESSION_NONE === session_status()) {
     $secure = Env::bool('APP_FORCE_HTTPS', false) && (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
     session_set_cookie_params([
         'lifetime' => 0,

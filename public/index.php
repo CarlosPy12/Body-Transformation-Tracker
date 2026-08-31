@@ -67,7 +67,7 @@ use App\Support\Env;
 
       <section id="riepilogo" class="view active-view" aria-labelledby="pageTitle">
         <div class="summary-stack" id="dashboardCards"></div>
-        <section class="panel wide">
+        <section class="panel wide chart-panel">
           <div class="section-head">
             <h2>Andamento peso</h2>
             <select id="dashboardRange" aria-label="Intervallo grafico riepilogo">
