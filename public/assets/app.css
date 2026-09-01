@@ -41,7 +41,8 @@ button:hover { transform: translateY(-1px); }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid rgba(34,216,207,.45); outline-offset: 3px; }
 label { display: grid; gap: .45rem; color: var(--muted); font-size: .9rem; }
 input, select, textarea { width: 100%; padding: .82rem .9rem; }
-select option { color: #101418; }
+select option { color: var(--text); background: #101b20; }
+select option:checked { color: #031212; background: var(--teal); }
 .skip-link { position: absolute; left: -999px; top: 1rem; }
 .skip-link:focus { left: 1rem; z-index: 10; }
 .muted { color: var(--muted); margin: 0; }
@@ -99,6 +100,7 @@ select option { color: #101418; }
   color: var(--text);
   font-size: .82rem;
 }
+.top-metric-field select option { color: var(--text); background: #101b20; }
 .top-metric-field select:focus { border-bottom-color: var(--teal); }
 .top-presets { align-items: end; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .top-presets button { position: relative; min-height: 42px; padding: .5rem .2rem .72rem; border-radius: 0; background: transparent; border: 0; color: var(--muted); }

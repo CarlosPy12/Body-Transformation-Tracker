@@ -9,13 +9,14 @@ const sections = [
   ['impostazioni', 'Impostazioni', 'settings']
 ];
 const metrics = {
-  peso: 'Peso', bmi: 'BMI', massa_grassa: 'Massa grassa', acqua: 'Acqua', muscoli: 'Muscoli',
+  peso: 'Peso', bmi: 'BMI', massa_grassa: 'Massa grassa', muscoli: 'Muscoli', passi: 'Passi',
+  acqua: 'Acqua',
   eta_metabolica: 'Età metabolica',
   braccio_sx_massa_grassa: 'Braccio SX - massa grassa', braccio_sx_muscoli: 'Braccio SX - muscoli',
   braccio_dx_massa_grassa: 'Braccio DX - massa grassa', braccio_dx_muscoli: 'Braccio DX - muscoli',
   gamba_sx_massa_grassa: 'Gamba SX - massa grassa', gamba_sx_muscoli: 'Gamba SX - muscoli',
   gamba_dx_massa_grassa: 'Gamba DX - massa grassa', gamba_dx_muscoli: 'Gamba DX - muscoli',
-  tronco_massa_grassa: 'Tronco - massa grassa', tronco_muscoli: 'Tronco - muscoli', passi: 'Passi'
+  tronco_massa_grassa: 'Tronco - massa grassa', tronco_muscoli: 'Tronco - muscoli'
 };
 const metricUnits = {
   peso: 'kg', bmi: '', massa_grassa: '%', acqua: '%', muscoli: '%',

@@ -27,6 +27,7 @@ $client->setAuthConfig($credentials);
 $client->addScope(Google\Service\Drive::DRIVE_READONLY);
 $drive = new Google\Service\Drive($client);
 $sync = new StepsSyncService($pdo);
+$totals = ['seen' => 0, 'eligible' => 0, 'processed' => 0, 'skipped' => 0, 'errors' => 0];
 
 foreach ($users as $user) {
     try {
@@ -35,20 +36,32 @@ foreach ($users as $user) {
             'fields' => 'files(id,name,modifiedTime,md5Checksum)',
         ]);
         foreach ($files->getFiles() as $file) {
+            $totals['seen']++;
             $fileDate = StepsCsvParser::dateFromFileName($file->getName());
             if ($fileDate === null || $fileDate < $syncStartDate) {
                 continue;
             }
+            $totals['eligible']++;
             try {
                 $content = $drive->files->get($file->getId(), ['alt' => 'media'])->getBody()->getContents();
-                $sync->upsertDailySteps((int) $user['id'], $file->getId(), $file->getName(), StepsSyncService::mysqlDate($file->getModifiedTime()), $content);
+                $result = $sync->upsertDailySteps((int) $user['id'], $file->getId(), $file->getName(), StepsSyncService::mysqlDate($file->getModifiedTime()), $content);
+                $totals[$result['status'] === 'skipped' ? 'skipped' : 'processed']++;
             } catch (Throwable $e) {
+                $totals['errors']++;
                 Logger::write('sync', 'Errore file passi, batch continua', ['file' => $file->getName(), 'error' => $e->getMessage()]);
             }
         }
     } catch (Throwable $e) {
+        $totals['errors']++;
         Logger::write('sync', 'Errore batch utente', ['user_id' => $user['id'], 'error' => $e->getMessage()]);
     }
 }
 
-echo "Sync passi completato.\n";
+echo sprintf(
+    "Sync passi completato. File visti: %d, eleggibili: %d, processati: %d, saltati: %d, errori: %d.\n",
+    $totals['seen'],
+    $totals['eligible'],
+    $totals['processed'],
+    $totals['skipped'],
+    $totals['errors']
+);
