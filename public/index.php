@@ -113,10 +113,18 @@ use App\Support\Env;
               <h2>Allenamento</h2>
               <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
             </div>
-            <label>Tipo <input name="workout_type" list="workoutTypes" value="Allenamento forza" required></label>
+            <label>Tipo
+              <select name="workout_type" required>
+                <option>Allenamento forza</option>
+                <option>Basket</option>
+                <option>Fisioterapia</option>
+                <option>Altro</option>
+              </select>
+            </label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
             <label class="check-row"><input name="completed" type="checkbox" value="1" checked> Segna anche come effettuato</label>
+            <label>Note <textarea name="notes" rows="2"></textarea></label>
             <button type="submit">Salva allenamento</button>
           </form>
         </dialog>
@@ -212,7 +220,14 @@ use App\Support\Env;
           <form id="activityWorkoutForm" class="panel form-panel horizontal-form">
             <h2>Programma allenamento</h2>
             <div class="injection-form-grid activity-form-grid">
-              <label>Tipo <input name="workout_type" list="workoutTypes" value="Allenamento forza" required></label>
+              <label>Tipo
+                <select name="workout_type" required>
+                  <option>Allenamento forza</option>
+                  <option>Basket</option>
+                  <option>Fisioterapia</option>
+                  <option>Altro</option>
+                </select>
+              </label>
               <label>Data partenza <input name="start_date" type="date" required></label>
               <label>Ora <input name="start_time" type="time" required></label>
               <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
@@ -302,8 +317,14 @@ use App\Support\Env;
           </form>
           <form id="workoutForm" class="panel form-panel">
             <h2>Pianifica allenamento</h2>
-            <label>Tipo <input name="workout_type" list="workoutTypes" value="Allenamento forza" required></label>
-            <datalist id="workoutTypes"><option>Allenamento forza</option><option>Fisioterapia</option><option>Basket</option><option>Altro</option></datalist>
+            <label>Tipo
+              <select name="workout_type" required>
+                <option>Allenamento forza</option>
+                <option>Basket</option>
+                <option>Fisioterapia</option>
+                <option>Altro</option>
+              </select>
+            </label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
             <label class="check-row"><input name="completed" type="checkbox" value="1"> Segna come effettuato</label>

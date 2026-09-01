@@ -181,7 +181,7 @@ function card(label, value, delta = '', accent = 'var(--teal)', icon = '') {
 }
 
 async function loadDashboard() {
-  const data = await api('dashboard');
+  const data = await api(`dashboard${rangeQuery()}`);
   const summary = data.metric_summary || {};
   const selectedMetric = state.dashboardMetric || 'peso';
   const selectedResults = await api(`results&metric=${selectedMetric}&range=${state.range}${rangeQuery()}`);
@@ -659,11 +659,15 @@ async function completeCalendarEvent(type, id) {
   if (!id) return;
   const route = type === 'iniezione' ? `injections/${id}/complete` : type === 'allenamento' ? `workouts/${id}/complete` : null;
   if (!route) return;
-  await api(route, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' '), completed_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
-  loadCalendar();
-  loadDashboard();
-  if (state.active === 'iniezioni') loadInjections();
-  if (state.active === 'attivita') loadActivities();
+  try {
+    await api(route, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' '), completed_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
+    loadCalendar();
+    loadDashboard();
+    if (state.active === 'iniezioni') loadInjections();
+    if (state.active === 'attivita') loadActivities();
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 function submitJson(path, after, serializer = form => Object.fromEntries(new FormData(form))) {
@@ -1061,7 +1065,7 @@ function eventText(e) {
   return `${workoutTypeMeta(e.workout_type).label} · ${statusIt(e.status)}`;
 }
 function calendarEventAction(e) {
-  if ((e.type === 'iniezione' || e.type === 'allenamento') && e.status === 'scheduled') {
+  if ((e.type === 'iniezione' || e.type === 'allenamento') && e.status !== 'completed') {
     return `<button type="button" class="ghost-button complete-inline" data-calendar-complete="${e.type}" data-event-id="${e.id}">Segna effettuata</button>`;
   }
   return '';

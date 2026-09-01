@@ -68,6 +68,8 @@ try {
         $latest = (new MeasurementRepository($pdo))->latest((int) $user['id']);
         $metricSummary = dashboard_metric_summary($pdo, (int) $user['id']);
         $today = date('Y-m-d');
+        $rangeStart = (!empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['start'])) ? $_GET['start'] . ' 00:00:00' : date('Y-m-d H:i:s', strtotime('-7 days'));
+        $rangeEnd = (!empty($_GET['end']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['end'])) ? $_GET['end'] . ' 23:59:59' : date('Y-m-d H:i:s', strtotime('+7 days'));
         $steps = $pdo->prepare('SELECT steps FROM daily_steps WHERE user_id = ? AND step_date = ?');
         $steps->execute([$user['id'], $today]);
         $settings = $pdo->prepare('SELECT daily_steps_target FROM user_settings WHERE user_id = ? LIMIT 1');
@@ -78,12 +80,12 @@ try {
         $currentInjection->execute([$user['id']]);
         $injectionCounts = $pdo->prepare('SELECT COALESCE(administered_dose_mg, planned_dose_mg) AS dose_mg, COUNT(*) AS total FROM glp1_injections WHERE user_id = ? AND status = "completed" GROUP BY COALESCE(administered_dose_mg, planned_dose_mg) ORDER BY dose_mg');
         $injectionCounts->execute([$user['id']]);
-        $workouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND completed_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND status = "completed"');
-        $workouts->execute([$user['id']]);
-        $plannedWorkouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND scheduled_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND scheduled_at <= UTC_TIMESTAMP() + INTERVAL 7 DAY');
-        $plannedWorkouts->execute([$user['id']]);
-        $workoutCounts = $pdo->prepare('SELECT workout_type, SUM(status = "completed") AS completed, COUNT(*) AS scheduled FROM workout_sessions WHERE user_id = ? AND scheduled_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND scheduled_at <= UTC_TIMESTAMP() + INTERVAL 7 DAY GROUP BY workout_type ORDER BY workout_type');
-        $workoutCounts->execute([$user['id']]);
+        $workouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND status = "completed" AND COALESCE(completed_at, scheduled_at) BETWEEN ? AND ?');
+        $workouts->execute([$user['id'], $rangeStart, $rangeEnd]);
+        $plannedWorkouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND scheduled_at BETWEEN ? AND ?');
+        $plannedWorkouts->execute([$user['id'], $rangeStart, $rangeEnd]);
+        $workoutCounts = $pdo->prepare('SELECT workout_type, SUM(status = "completed") AS completed, COUNT(*) AS scheduled FROM workout_sessions WHERE user_id = ? AND scheduled_at BETWEEN ? AND ? GROUP BY workout_type ORDER BY workout_type');
+        $workoutCounts->execute([$user['id'], $rangeStart, $rangeEnd]);
         Response::ok([
             'latest_measurement' => $latest,
             'metric_summary' => $metricSummary,
