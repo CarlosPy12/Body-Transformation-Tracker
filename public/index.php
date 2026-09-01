@@ -58,7 +58,8 @@ use App\Support\Env;
         </div>
         <div class="topbar-actions">
           <div class="segmented top-presets" id="topRangeTabs" role="tablist" aria-label="Filtri periodo"></div>
-          <div class="date-range" aria-label="Periodo dati">
+          <label id="topMetricField" class="top-metric-field" hidden>Metrica <select id="metricSelect"></select></label>
+          <div class="date-range inline-range" aria-label="Periodo dati">
             <label>Da <input id="rangeStart" type="date"></label>
             <label>A <input id="rangeEnd" type="date"></label>
           </div>
@@ -205,11 +206,47 @@ use App\Support\Env;
         </div>
       </section>
 
-      <section id="risultati" class="view">
-        <div class="filters panel">
-          <div class="segmented" id="rangeTabs" role="tablist" aria-label="Intervallo risultati"></div>
-          <label>Metrica <select id="metricSelect"></select></label>
+      <section id="attivita" class="view">
+        <div class="injection-layout">
+          <form id="activityWorkoutForm" class="panel form-panel horizontal-form">
+            <h2>Programma allenamento</h2>
+            <div class="injection-form-grid activity-form-grid">
+              <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
+              <label>Data partenza <input name="start_date" type="date" required></label>
+              <label>Ora <input name="start_time" type="time" required></label>
+              <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+              <label>Ricorrenza fino a <input name="recurrence_until" type="date"></label>
+              <label>Giorni settimana
+                <select name="weekdays" multiple size="3" aria-label="Giorni ricorrenza">
+                  <option value="1">Lunedì</option>
+                  <option value="2">Martedì</option>
+                  <option value="3">Mercoledì</option>
+                  <option value="4">Giovedì</option>
+                  <option value="5">Venerdì</option>
+                  <option value="6">Sabato</option>
+                  <option value="0">Domenica</option>
+                </select>
+              </label>
+              <label class="notes-field">Note <textarea name="notes" rows="1"></textarea></label>
+              <button type="submit">Programma calendario</button>
+            </div>
+          </form>
+          <div class="panel measurements-panel">
+            <h2>Allenamenti</h2>
+            <div class="table-wrap">
+              <table id="activityWorkoutTable" class="data-table"></table>
+            </div>
+          </div>
+          <div class="panel measurements-panel">
+            <h2>Passi</h2>
+            <div class="table-wrap">
+              <table id="activityStepsTable" class="data-table"></table>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <section id="risultati" class="view">
         <div class="metric-grid compact" id="resultKpis"></div>
         <section class="panel wide">
           <h2 id="resultChartTitle">Grafico</h2>

@@ -3,6 +3,7 @@ const sections = [
   ['aggiungi', 'Aggiungi attività', 'plus', 'Aggiungi'],
   ['riepilogo', 'Riepilogo', 'home'],
   ['iniezioni', 'Iniezioni', 'syringe'],
+  ['attivita', 'Attività fisica', 'dumbbell', 'Attività'],
   ['risultati', 'Risultati', 'chart'],
   ['calendario', 'Calendario', 'calendar'],
   ['impostazioni', 'Impostazioni', 'settings']
@@ -78,6 +79,7 @@ const eventTypes = {
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
 const fmtInt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
 const $ = (sel) => document.querySelector(sel);
+const calendarEventStore = new Map();
 const doseColors = ['#8f8f8f', '#8d38e8', '#22d8cf', '#e23295', '#98e33f', '#ff9b50'];
 const doseBadgePlugin = {
   id: 'doseBadges',
@@ -146,9 +148,11 @@ function showView(id) {
   document.querySelectorAll('.nav-button').forEach(b => b.classList.toggle('active', b.dataset.view === id));
   $('#pageTitle').textContent = sections.find(s => s[0] === id)?.[1] || 'Riepilogo';
   document.body.classList.toggle('calendar-mode', id === 'calendario');
+  $('#topMetricField').hidden = id !== 'risultati';
   if (id === 'aggiungi') loadEntryDefaults();
   if (id === 'risultati') loadResults();
   if (id === 'iniezioni') loadInjections();
+  if (id === 'attivita') loadActivities();
   if (id === 'calendario') loadCalendar();
   if (id === 'impostazioni') loadAdmin();
 }
@@ -341,6 +345,60 @@ async function loadInjections() {
   }));
 }
 
+async function loadActivities() {
+  const [workouts, steps] = await Promise.all([
+    api(`workouts${rangeQuery()}&include_future=1`),
+    api(`steps${rangeQuery()}`)
+  ]);
+  $('#activityWorkoutTable').innerHTML = renderWorkoutTable(workouts);
+  $('#activityStepsTable').innerHTML = renderStepsTable(steps);
+  makeSortable($('#activityWorkoutTable'));
+  makeSortable($('#activityStepsTable'));
+  document.querySelectorAll('[data-complete-workout]').forEach(btn => btn.addEventListener('click', async () => {
+    await api(`workouts/${btn.dataset.completeWorkout}/complete`, { method: 'POST', body: JSON.stringify({ completed_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
+    loadActivities();
+    loadDashboard();
+    if (state.active === 'calendario') loadCalendar();
+  }));
+}
+
+function renderWorkoutTable(rows) {
+  const head = `<thead><tr>
+    <th data-sort="text">Tipo</th>
+    <th data-sort="date">Data</th>
+    <th data-sort="text">Ora</th>
+    <th data-sort="number">Durata</th>
+    <th data-sort="text">Stato</th>
+    <th>Azioni</th>
+  </tr></thead>`;
+  const body = rows.map(row => {
+    const scheduled = new Date(row.scheduled_at.replace(' ', 'T'));
+    return `<tr>
+      <td>${row.workout_type}</td>
+      <td data-value="${row.scheduled_at}">${dateOnly(row.scheduled_at)}</td>
+      <td>${timeOnly(scheduled)}</td>
+      <td data-value="${Number(row.duration_minutes || 0)}">${row.duration_minutes ? `${fmtInt.format(row.duration_minutes)} min` : 'N/D'}</td>
+      <td>${statusIt(row.status)}</td>
+      <td class="row-actions">${row.status === 'scheduled' ? `<button type="button" data-complete-workout="${row.id}">Segna effettuato</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+  return `${head}<tbody>${body || '<tr><td colspan="6">Nessun allenamento nel periodo.</td></tr>'}</tbody>`;
+}
+
+function renderStepsTable(rows) {
+  const head = `<thead><tr>
+    <th data-sort="date">Data</th>
+    <th data-sort="number">Passi</th>
+    <th data-sort="text">Origine</th>
+  </tr></thead>`;
+  const body = rows.map(row => `<tr>
+    <td data-value="${row.step_date}">${dateOnly(row.step_date)}</td>
+    <td data-value="${Number(row.steps || 0)}">${fmtInt.format(row.steps)} passi</td>
+    <td>${row.source || 'manual'}</td>
+  </tr>`).join('');
+  return `${head}<tbody>${body || '<tr><td colspan="3">Nessun dato passi nel periodo.</td></tr>'}</tbody>`;
+}
+
 function renderInjectionTable(rows) {
   const head = `<thead><tr>
     <th data-sort="text">Farmaco</th>
@@ -390,14 +448,22 @@ async function loadCalendar() {
 }
 
 function renderDayDetails(day, events) {
+  calendarEventStore.clear();
   $('#dayEvents').innerHTML = `<div class="section-head day-head"><h2>${dateIt(day)}</h2><div class="day-actions">
     <button type="button" class="ghost-button" data-day-dialog="quickMeasurementDialog" data-day="${day}">${eventIcon('misurazione', 'Misurazione')} Misurazione</button>
     <button type="button" class="ghost-button" data-day-dialog="quickInjectionDialog" data-day="${day}">${eventIcon('iniezione', 'Iniezione')} Iniezione</button>
     <button type="button" class="ghost-button" data-day-dialog="quickWorkoutDialog" data-day="${day}">${eventIcon('allenamento', 'Allenamento')} Allenamento</button>
     <button type="button" class="ghost-button" data-day-dialog="quickStepsDialog" data-day="${day}">${eventIcon('passi', 'Passi')} Passi</button>
-  </div></div><div class="day-event-list">` + (events.map(e => `<button type="button" class="day-event" data-edit-event='${escapeAttr(JSON.stringify(e))}'>${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span>${calendarEventAction(e)}</button>`).join('') || '<p class="muted">Nessun evento.</p>') + '</div>';
+  </div></div><div class="day-event-list">` + (events.map(e => {
+    const key = `${e.type}-${e.id}`;
+    calendarEventStore.set(key, e);
+    return `<div class="day-event">
+      <button type="button" class="day-event-main" data-edit-event="${key}">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span></button>
+      ${calendarEventAction(e)}
+    </div>`;
+  }).join('') || '<p class="muted">Nessun evento.</p>') + '</div>';
   document.querySelectorAll('[data-day-dialog]').forEach(btn => btn.addEventListener('click', () => openDayDialog(btn.dataset.dayDialog, btn.dataset.day)));
-  document.querySelectorAll('[data-edit-event]').forEach(btn => btn.addEventListener('click', () => openEventEditDialog(JSON.parse(btn.dataset.editEvent))));
+  document.querySelectorAll('[data-edit-event]').forEach(btn => btn.addEventListener('click', () => openEventEditDialog(calendarEventStore.get(btn.dataset.editEvent))));
   document.querySelectorAll('[data-calendar-complete]').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     completeCalendarEvent(btn.dataset.calendarComplete, btn.dataset.eventId);
@@ -429,10 +495,11 @@ function setupAppForms() {
     const dialog = document.getElementById(btn.dataset.dialog);
     resetDialogForm(dialog);
     loadEntryDefaults();
-    dialog?.showModal();
+    safeShowDialog(dialog);
   }));
   document.querySelectorAll('[data-close-dialog]').forEach(btn => btn.addEventListener('click', () => btn.closest('dialog')?.close()));
   $('#injectionForm').addEventListener('submit', submitJson('injections', afterInjectionsSaved));
+  $('#activityWorkoutForm').addEventListener('submit', submitJson('workouts', afterWorkoutsSaved, formDataWithMultiSelect));
   $('#workoutForm').addEventListener('submit', submitJson('workouts', loadCalendar));
   $('#goalForm').addEventListener('submit', submitJson('goals', afterGoalSaved));
   $('#quickMeasurementForm').addEventListener('submit', submitJson('measurements', afterQuickSave));
@@ -489,7 +556,7 @@ async function openDayDialog(dialogId, day) {
   if (measuredAt) measuredAt.value = dateTime;
   if (scheduledAt) scheduledAt.value = dateTime;
   if (stepDate) stepDate.value = day;
-  dialog.showModal();
+  safeShowDialog(dialog);
 }
 
 async function openEventEditDialog(event) {
@@ -504,7 +571,15 @@ async function openEventEditDialog(event) {
   if (!dialog) return;
   resetDialogForm(dialog);
   populateEventForm(dialog.querySelector('form'), event);
-  dialog.showModal();
+  safeShowDialog(dialog);
+}
+
+function safeShowDialog(dialog) {
+  if (!dialog) return;
+  document.querySelectorAll('dialog[open]').forEach(openDialog => {
+    if (openDialog !== dialog) openDialog.close();
+  });
+  if (!dialog.open) dialog.showModal();
 }
 
 function resetDialogForm(dialog) {
@@ -559,17 +634,29 @@ async function completeCalendarEvent(type, id) {
   if (state.active === 'iniezioni') loadInjections();
 }
 
-function submitJson(path, after) {
+function submitJson(path, after, serializer = form => Object.fromEntries(new FormData(form))) {
   return async (e) => {
     e.preventDefault();
-    const body = Object.fromEntries(new FormData(e.target));
+    const body = serializer(e.target);
     const id = body.id;
     delete body.id;
-    const result = await api(id ? `${path}/${id}` : path, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
-    e.target.closest('dialog')?.close();
-    e.target.reset();
-    after(result, e.target);
+    try {
+      const result = await api(id ? `${path}/${id}` : path, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+      e.target.closest('dialog')?.close();
+      e.target.reset();
+      after(result, e.target);
+    } catch (err) {
+      alert(err.message);
+    }
   };
+}
+
+function formDataWithMultiSelect(form) {
+  const body = Object.fromEntries(new FormData(form));
+  form.querySelectorAll('select[multiple]').forEach(select => {
+    body[select.name] = [...select.selectedOptions].map(option => option.value);
+  });
+  return body;
 }
 
 function afterQuickSave() {
@@ -577,6 +664,7 @@ function afterQuickSave() {
   loadDashboard();
   if (state.active === 'risultati') loadResults();
   if (state.active === 'calendario') loadCalendar();
+  if (state.active === 'attivita') loadActivities();
   alert('Inserimento salvato.');
 }
 
@@ -593,7 +681,16 @@ function afterInjectionsSaved(result) {
   loadInjections();
   loadDashboard();
   if (state.active === 'calendario') loadCalendar();
+  if (state.active === 'attivita') loadActivities();
   alert(`${result.created ?? 1} iniezioni programmate. ${result.skipped ? `${result.skipped} già presenti.` : ''}`.trim());
+}
+
+function afterWorkoutsSaved(result) {
+  hydrateDefaultDates();
+  loadActivities();
+  loadDashboard();
+  if (state.active === 'calendario') loadCalendar();
+  alert(`${result.created ?? 1} allenamenti programmati. ${result.skipped ? `${result.skipped} già presenti.` : ''}`.trim());
 }
 
 async function subscribePush() {
@@ -630,13 +727,6 @@ function populateControls() {
     if (state.active === 'risultati') loadResults();
     if (state.active === 'iniezioni') loadInjections();
   }));
-  $('#rangeTabs').innerHTML = ranges.map(([k, v]) => `<button data-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
-  document.querySelectorAll('[data-range]').forEach(btn => btn.addEventListener('click', () => {
-    state.range = btn.dataset.range;
-    applyPresetRange(state.range);
-    document.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', b === btn));
-    loadResults();
-  }));
   $('#calendarLegend').innerHTML = Object.entries(eventTypes).map(([type, meta]) => `<span>${eventIcon(type, meta.shortLabel)} ${meta.shortLabel}</span>`).join('');
 }
 
@@ -667,6 +757,7 @@ function updateDateRange() {
   loadDashboard();
   if (state.active === 'risultati') loadResults();
   if (state.active === 'iniezioni') loadInjections();
+  if (state.active === 'attivita') loadActivities();
 }
 
 function applyPresetRange(range) {
@@ -687,7 +778,6 @@ function applyPresetRange(range) {
 
 function setRangeButtonState(activeRange) {
   document.querySelectorAll('[data-top-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.topRange === activeRange));
-  document.querySelectorAll('[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === state.range && activeRange !== 'custom'));
 }
 
 function uniqueCalendarEvents(rows) {

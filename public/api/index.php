@@ -269,6 +269,24 @@ try {
         return;
     }
 
+    if ($path === 'steps' && $method === 'GET') {
+        $sql = 'SELECT * FROM daily_steps WHERE user_id = ?';
+        $values = [$user['id']];
+        if (!empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['start'])) {
+            $sql .= ' AND step_date >= ?';
+            $values[] = $_GET['start'];
+        }
+        if (!empty($_GET['end']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['end'])) {
+            $sql .= ' AND step_date <= ?';
+            $values[] = $_GET['end'];
+        }
+        $sql .= ' ORDER BY step_date DESC LIMIT 240';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($values);
+        Response::ok($stmt->fetchAll());
+        return;
+    }
+
     if (preg_match('#^steps/(\d+)$#', $path, $m) && $method === 'PUT') {
         require_csrf($auth);
         $date = normalize_date((string) ($input['step_date'] ?? date('Y-m-d')));
@@ -364,21 +382,47 @@ try {
     }
 
     if ($path === 'workouts' && $method === 'GET') {
-        $stmt = $pdo->prepare('SELECT * FROM workout_sessions WHERE user_id = ? ORDER BY scheduled_at DESC LIMIT 80');
-        $stmt->execute([$user['id']]);
+        $sql = 'SELECT * FROM workout_sessions WHERE user_id = ?';
+        $values = [$user['id']];
+        if (!empty($_GET['start']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['start'])) {
+            $sql .= ' AND scheduled_at >= ?';
+            $values[] = $_GET['start'] . ' 00:00:00';
+        }
+        if (!empty($_GET['end']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $_GET['end'])) {
+            if (!empty($_GET['include_future'])) {
+                $sql .= ' AND (scheduled_at <= ? OR (status = "scheduled" AND scheduled_at >= CURDATE()))';
+            } else {
+                $sql .= ' AND scheduled_at <= ?';
+            }
+            $values[] = $_GET['end'] . ' 23:59:59';
+        }
+        $sql .= ' ORDER BY scheduled_at DESC LIMIT 200';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($values);
         Response::ok($stmt->fetchAll());
         return;
     }
 
     if ($path === 'workouts' && $method === 'POST') {
         require_csrf($auth);
-        $scheduledAt = (string) ($input['scheduled_at'] ?? date('Y-m-d H:i:s'));
+        $dates = workout_schedule_dates($input);
         $completed = !empty($input['completed']);
         $status = $completed ? 'completed' : 'scheduled';
-        $completedAt = $completed ? $scheduledAt : null;
+        $exists = $pdo->prepare('SELECT id FROM workout_sessions WHERE user_id = ? AND scheduled_at = ? AND workout_type = ? LIMIT 1');
         $stmt = $pdo->prepare('INSERT INTO workout_sessions(user_id, scheduled_at, completed_at, workout_type, duration_minutes, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$user['id'], $scheduledAt, $completedAt, $input['workout_type'], $input['duration_minutes'] ?? null, $status, $input['notes'] ?? null]);
-        Response::ok(['id' => (int) $pdo->lastInsertId()]);
+        $created = 0;
+        $skipped = 0;
+        foreach ($dates as $scheduledAt) {
+            $exists->execute([$user['id'], $scheduledAt, $input['workout_type'] ?? 'Allenamento']);
+            if ($exists->fetchColumn()) {
+                $skipped++;
+                continue;
+            }
+            $completedAt = $completed ? $scheduledAt : null;
+            $stmt->execute([$user['id'], $scheduledAt, $completedAt, $input['workout_type'] ?? 'Allenamento', int_or_null($input['duration_minutes'] ?? null), $status, $input['notes'] ?? null]);
+            $created++;
+        }
+        Response::ok(['id' => (int) $pdo->lastInsertId(), 'created' => $created, 'skipped' => $skipped]);
         return;
     }
 
@@ -530,6 +574,37 @@ function injection_schedule_dates(array $input): array
     while ($cursor <= $until && count($dates) < 80) {
         $dates[] = $cursor->format('Y-m-d H:i:s');
         $cursor = $cursor->modify('+1 week');
+    }
+
+    return $dates ?: [$start->format('Y-m-d H:i:s')];
+}
+
+/** @return list<string> */
+function workout_schedule_dates(array $input): array
+{
+    $scheduledAt = (string) ($input['scheduled_at'] ?? '');
+    if ($scheduledAt !== '') {
+        return [normalize_measured_at(str_replace('T', ' ', $scheduledAt))];
+    }
+
+    $date = normalize_date((string) ($input['start_date'] ?? date('Y-m-d')));
+    $time = trim((string) ($input['start_time'] ?? '10:00'));
+    $start = new DateTimeImmutable($date . ' ' . ($time !== '' ? $time : '10:00'));
+    $untilRaw = trim((string) ($input['recurrence_until'] ?? ''));
+    $weekdays = array_values(array_unique(array_filter(array_map('strval', (array) ($input['weekdays'] ?? [])), static fn (string $day): bool => preg_match('/^[0-6]$/', $day) === 1)));
+
+    if ($untilRaw === '' || $weekdays === []) {
+        return [$start->format('Y-m-d H:i:s')];
+    }
+
+    $until = new DateTimeImmutable(normalize_date($untilRaw) . ' 23:59:59');
+    $dates = [];
+    $cursor = $start;
+    while ($cursor <= $until && count($dates) < 240) {
+        if (in_array($cursor->format('w'), $weekdays, true)) {
+            $dates[] = $cursor->format('Y-m-d H:i:s');
+        }
+        $cursor = $cursor->modify('+1 day');
     }
 
     return $dates ?: [$start->format('Y-m-d H:i:s')];
