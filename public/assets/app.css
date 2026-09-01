@@ -160,7 +160,10 @@ select option:checked { color: #031212; background: var(--teal); }
 .section-head h2, .panel h2 { margin: 0 0 .8rem; font-size: 1.05rem; }
 .section-head h2 { margin: 0; }
 .chart-panel { padding: 1.05rem 1.25rem 1rem; }
-.chart-panel .section-head select { justify-self: end; max-width: 150px; }
+.chart-metric-field { justify-self: end; width: min(100%, 190px); gap: .25rem; font-size: .68rem; }
+.chart-metric-field select { width: 100%; padding: .5rem .1rem .64rem; border: 0; border-bottom: 2px solid rgba(255,255,255,.18); border-radius: 0; background: transparent; color: var(--text); font-size: .82rem; }
+.chart-metric-field select:focus { border-bottom-color: var(--teal); }
+.card-progress { margin: .2rem 0 .35rem; }
 .two-column { display: grid; grid-template-columns: minmax(280px, 410px) 1fr; gap: .85rem; align-items: start; }
 .injection-layout { display: grid; gap: .85rem; }
 .form-panel { display: grid; gap: .9rem; }

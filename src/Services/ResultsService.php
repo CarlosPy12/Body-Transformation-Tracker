@@ -102,13 +102,12 @@ final class ResultsService
         $lastDate = new DateTimeImmutable((string) $series[array_key_last($series)]['date']);
         $days = max(1, (int) $firstDate->diff($lastDate)->format('%a'));
         $weeklyChange = ($last - $first) / max($days / 7, 1);
-        $weeklyLoss = $metric === 'peso' ? -$weeklyChange : $weeklyChange;
         return [
             'valore_corrente' => $last,
             'valore_iniziale' => $first,
             'variazione_totale' => $last - $first,
             'variazione_percentuale' => $first != 0.0 ? (($last - $first) / $first) * 100 : null,
-            'media_settimanale' => $weeklyLoss,
+            'media_settimanale' => $weeklyChange,
             'delta_target' => $target !== null ? $last - $target : null,
             'minimo' => min($values),
             'massimo' => max($values),

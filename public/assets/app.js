@@ -191,6 +191,7 @@ async function loadDashboard() {
     combinedGlpCard(data),
     combinedActivityCard(data)
   ].join('');
+  $('#dashboardChartTitle').textContent = `Andamento ${metrics[selectedMetric].toLocaleLowerCase('it-IT')}`;
   drawMetricChart('overviewChart', selectedResults, metrics[selectedMetric]);
 }
 
@@ -248,12 +249,31 @@ function metricRow(title, metric, data = {}, kpi = {}, accent = 'var(--teal)') {
   const start = formatMetricValue(kpi.valore_iniziale ?? data.initial, metric);
   const percent = formatKpi('variazione_percentuale', kpi.variazione_percentuale, metric);
   const weekly = formatSignedMetricValue(kpi.media_settimanale, metric);
+  const goalProgress = targetProgress(data.initial, data.current, data.target, metric);
   return `<section class="dashboard-metric-row four" aria-label="${title}">
     ${card(`${title} corrente`, current, `Partenza ${start} · ${percent}`, accent, metricIcon(metric))}
     ${card(`${title} target`, target, data.target === null || data.target === undefined ? 'Imposta un obiettivo' : 'Obiettivo attivo', accent, metricIcon(metric))}
-    ${card('Delta da target', delta, delta !== 'N/D' && unit === 'kg' ? 'kg da perdere' : 'Distanza obiettivo', accent, 'target')}
+    ${card(goalDistanceLabel(metric, unit), delta, goalProgress === null ? 'Imposta un obiettivo' : `<span class="progress-track card-progress"><i style="width:${goalProgress}%"></i></span>${fmt.format(goalProgress)}% completato`, accent, 'target')}
     ${card(metric === 'peso' ? 'Perdita settimanale' : 'Variazione settimanale', weekly, 'Media sul periodo selezionato', accent, 'chart')}
   </section>`;
+}
+
+function goalDistanceLabel(metric, unit) {
+  if (metric === 'peso') return 'kg a obiettivo';
+  if (metric === 'bmi') return 'BMI a obiettivo';
+  if (metric === 'massa_grassa') return 'Massa grassa a obiettivo';
+  if (metric === 'muscoli') return 'Muscoli a obiettivo';
+  return `${unit || 'Valore'} a obiettivo`;
+}
+
+function targetProgress(initial, current, target, metric) {
+  const start = Number(initial);
+  const now = Number(current);
+  const goal = Number(target);
+  if (![start, now, goal].every(Number.isFinite) || start === goal) return null;
+  const direction = metric === 'muscoli' ? 1 : -1;
+  const progress = direction === 1 ? ((now - start) / (goal - start)) * 100 : ((start - now) / (start - goal)) * 100;
+  return Math.max(0, Math.min(100, progress));
 }
 
 async function loadResults() {
@@ -558,9 +578,9 @@ function setupAppForms() {
   $('#prevMonthBtn').addEventListener('click', () => shiftCalendarMonth(-1));
   $('#nextMonthBtn').addEventListener('click', () => shiftCalendarMonth(1));
   $('#todayMonthBtn').addEventListener('click', goToTodayMonth);
-  $('#dashboardRange').addEventListener('change', e => {
-    state.range = e.target.value;
-    applyPresetRange(state.range);
+  $('#dashboardChartMetric').addEventListener('change', e => {
+    state.dashboardMetric = e.target.value;
+    syncDashboardMetricControls();
     loadDashboard();
   });
   $('#rangeStart').addEventListener('change', updateDateRange);
@@ -743,13 +763,15 @@ async function subscribePush() {
 function populateControls() {
   const metricOptions = Object.entries(metrics).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
   $('#metricSelect').innerHTML = metricOptions;
+  $('#dashboardChartMetric').innerHTML = dashboardMetrics.map(metric => `<option value="${metric}">${metrics[metric]}</option>`).join('');
+  $('#dashboardChartMetric').value = state.dashboardMetric;
   $('#goalForm select[name="metric_key"]').innerHTML = $('#metricSelect').innerHTML;
   $('#quickGoalForm select[name="metric_key"]').innerHTML = metricOptions;
   $('#metricSelect').addEventListener('change', e => { state.metric = e.target.value; loadResults(); });
   $('#dashboardMetricToggle').innerHTML = dashboardMetrics.map(metric => `<button type="button" data-dashboard-metric="${metric}" class="${metric === state.dashboardMetric ? 'active' : ''}">${metrics[metric]}</button>`).join('');
   document.querySelectorAll('[data-dashboard-metric]').forEach(btn => btn.addEventListener('click', () => {
     state.dashboardMetric = btn.dataset.dashboardMetric;
-    document.querySelectorAll('[data-dashboard-metric]').forEach(item => item.classList.toggle('active', item === btn));
+    syncDashboardMetricControls();
     loadDashboard();
   }));
   const ranges = [['1w', '1 settimana'], ['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
@@ -810,12 +832,16 @@ function applyPresetRange(range) {
   state.rangeEnd = isoDate(end);
   $('#rangeStart').value = state.rangeStart;
   $('#rangeEnd').value = state.rangeEnd;
-  $('#dashboardRange').value = range;
   setRangeButtonState(range);
 }
 
 function setRangeButtonState(activeRange) {
   document.querySelectorAll('[data-top-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.topRange === activeRange));
+}
+
+function syncDashboardMetricControls() {
+  $('#dashboardChartMetric').value = state.dashboardMetric;
+  document.querySelectorAll('[data-dashboard-metric]').forEach(item => item.classList.toggle('active', item.dataset.dashboardMetric === state.dashboardMetric));
 }
 
 function uniqueCalendarEvents(rows) {
@@ -968,7 +994,7 @@ function labelize(key, metric = state.metric) {
     valore_iniziale: 'Valore iniziale',
     variazione_totale: 'Variazione totale',
     variazione_percentuale: 'Variazione percentuale',
-    media_settimanale: metric === 'peso' ? 'Media kg persi / settimana' : 'Media settimanale',
+    media_settimanale: metric === 'peso' ? 'Perdita settimanale' : 'Media settimanale',
     delta_target: 'Delta da target',
     media_giornaliera: 'Media giornaliera',
     totale_periodo: 'Totale periodo',

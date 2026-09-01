@@ -178,15 +178,8 @@ use App\Support\Env;
         <div class="summary-stack" id="dashboardCards"></div>
         <section class="panel wide chart-panel">
           <div class="section-head">
-            <h2>Andamento peso</h2>
-            <select id="dashboardRange" aria-label="Intervallo grafico riepilogo">
-              <option value="1w">1 settimana</option>
-              <option value="1m">1 mese</option>
-              <option value="3m" selected>3 mesi</option>
-              <option value="6m">6 mesi</option>
-              <option value="1y">1 anno</option>
-              <option value="all">Sempre</option>
-            </select>
+            <h2 id="dashboardChartTitle">Andamento peso</h2>
+            <label class="chart-metric-field">Metrica <select id="dashboardChartMetric" aria-label="Metrica grafico riepilogo"></select></label>
           </div>
           <canvas id="overviewChart" height="130"></canvas>
         </section>
