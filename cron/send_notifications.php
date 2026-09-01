@@ -24,25 +24,36 @@ $auth = [
 ];
 
 $webPush = new Minishlink\WebPush\WebPush($auth);
-$today = date('Y-m-d');
+$now = new DateTimeImmutable('now');
 $events = [];
 
 $queries = [
-    ['injection', 'glp1_injections', 'scheduled_at', 'Iniezione GLP-1 oggi', "È prevista un'iniezione da %s mg."],
-    ['workout', 'workout_sessions', 'scheduled_at', 'Allenamento oggi', 'Hai programmato %s.'],
+    ['injection', 'glp1_injections', 'scheduled_at', 'Iniezione GLP-1', "È prevista un'iniezione da %s mg."],
+    ['workout', 'workout_sessions', 'scheduled_at', 'Allenamento', 'Hai programmato %s.'],
 ];
 
 foreach ($queries as [$type, $table, $column, $title, $bodyTemplate]) {
-    $stmt = $pdo->prepare("SELECT * FROM {$table} WHERE DATE({$column}) = ? AND status = 'scheduled'");
-    $stmt->execute([$today]);
+    $beforeSelect = table_has_column($pdo, $table, 'reminder_minutes_before') ? 'reminder_minutes_before' : ($type === 'injection' ? '1440 AS reminder_minutes_before' : '60 AS reminder_minutes_before');
+    $repeatSelect = table_has_column($pdo, $table, 'reminder_repeat_minutes') ? 'reminder_repeat_minutes' : '0 AS reminder_repeat_minutes';
+    $stmt = $pdo->prepare("SELECT *, {$beforeSelect}, {$repeatSelect} FROM {$table} WHERE {$column} >= ? AND {$column} <= DATE_ADD(?, INTERVAL 2 DAY) AND status = 'scheduled'");
+    $stmt->execute([$now->format('Y-m-d H:i:s'), $now->format('Y-m-d H:i:s')]);
     foreach ($stmt->fetchAll() as $row) {
-        $events[] = [$type, $table, $row, $title, $bodyTemplate];
+        $eventAt = new DateTimeImmutable((string) $row[$column]);
+        $minutesUntil = (int) floor(($eventAt->getTimestamp() - $now->getTimestamp()) / 60);
+        $reminderBefore = max(0, (int) ($row['reminder_minutes_before'] ?? ($type === 'injection' ? 1440 : 60)));
+        if ($minutesUntil < 0 || $minutesUntil > $reminderBefore) {
+            continue;
+        }
+        $repeat = max(0, (int) ($row['reminder_repeat_minutes'] ?? 0));
+        $bucket = $repeat > 0 ? (string) floor($minutesUntil / $repeat) : 'once';
+        $events[] = [$type . '_' . $bucket, $type, $table, $column, $row, $title, $bodyTemplate];
     }
 }
 
-foreach ($events as [$type, $table, $event, $title, $bodyTemplate]) {
+foreach ($events as [$notificationType, $type, $table, $column, $event, $title, $bodyTemplate]) {
+    $scheduledFor = date('Y-m-d', strtotime((string) $event[$column]));
     $exists = $pdo->prepare('SELECT id FROM notification_log WHERE user_id = ? AND notification_type = ? AND related_table = ? AND related_id = ? AND scheduled_for = ?');
-    $exists->execute([$event['user_id'], $type, $table, $event['id'], $today]);
+    $exists->execute([$event['user_id'], $notificationType, $table, $event['id'], $scheduledFor]);
     if ($exists->fetch()) {
         continue;
     }
@@ -71,7 +82,19 @@ foreach ($events as [$type, $table, $event, $title, $bodyTemplate]) {
         }
     }
     $pdo->prepare('INSERT IGNORE INTO notification_log(user_id, notification_type, related_table, related_id, scheduled_for, sent_at, status, error_message) VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP(), ?, ?)')
-        ->execute([$event['user_id'], $type, $table, $event['id'], $today, $status, $error]);
+        ->execute([$event['user_id'], $notificationType, $table, $event['id'], $scheduledFor, $status, $error]);
 }
 
 echo "Notifiche elaborate.\n";
+
+function table_has_column(PDO $pdo, string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$table, $column]);
+    return $cache[$key] = ((int) $stmt->fetchColumn() > 0);
+}

@@ -1,4 +1,4 @@
-# Body Tracker
+# Kinetica
 
 PWA PHP 8/MySQL per monitorare peso, composizione corporea, GLP-1, obiettivi, allenamenti, passi da Google Drive, calendario e notifiche push. Tutta la UI e i messaggi sono in italiano.
 
@@ -16,7 +16,7 @@ PWA PHP 8/MySQL per monitorare peso, composizione corporea, GLP-1, obiettivi, al
 2. Carica il repository sul server, con document root puntata a `public/`.
 3. Esegui `composer install --no-dev --optimize-autoloader`.
 4. Copia `.env.example` in `.env` fuori da `public/` e compila i valori reali.
-5. Importa `database/migrations/001_initial_schema.sql` nel database.
+5. Importa `database/migrations/001_initial_schema.sql` nel database, poi `database/migrations/002_event_reminders.sql` se stai aggiornando un'installazione esistente.
 6. Imposta PHP 8.x e HTTPS obbligatorio.
 7. Assicurati che `storage/logs` e `storage/uploads` siano scrivibili dal processo PHP.
 8. Configura `FIRST_ADMIN_EMAIL`, `FIRST_ADMIN_PASSWORD`, `FIRST_ADMIN_NAME`, poi esegui `php database/seeds/create_super_admin.php`.
@@ -26,8 +26,8 @@ PWA PHP 8/MySQL per monitorare peso, composizione corporea, GLP-1, obiettivi, al
 12. Condividi la cartella Health Sync con l'email del Service Account.
 13. Inserisci `GOOGLE_DRIVE_STEPS_FOLDER_ID` e `GOOGLE_SERVICE_ACCOUNT_JSON_PATH` nel `.env`.
 14. Configura cron cPanel:
-    - `*/15 * * * * /usr/local/bin/php /home/utente/app/cron/sync_steps.php`
-    - `0 9 * * * /usr/local/bin/php /home/utente/app/cron/send_notifications.php`
+    - `*/10 * * * * /usr/local/bin/php /home/utente/app/cron/sync_steps.php`
+    - `*/5 * * * * /usr/local/bin/php /home/utente/app/cron/send_notifications.php`
 15. Apri il dominio, fai login e installa la PWA su Android dal browser.
 
 ## Valori reali da fornire
@@ -104,6 +104,24 @@ STEPS_SYNC_START_DATE=2026-09-01
 ```
 
 Se `STEPS_SYNC_START_DATE` non e configurata, il cron processa solo file dalla data corrente in avanti.
+
+Consiglio operativo: Health Sync aggiorna il CSV al massimo ogni 10 minuti, quindi il cron passi ha senso ogni 10 minuti. Se lo fai piu spesso non ottieni dati piu freschi, ma aumenti solo le chiamate a Drive.
+
+## Notifiche Push
+
+Per i promemoria evento per evento importa una sola volta:
+
+```bash
+mysql -u USER -p DATABASE < database/migrations/002_event_reminders.sql
+```
+
+Poi in cPanel configura il cron notifiche ogni 5 minuti:
+
+```cron
+*/5 * * * * /usr/local/bin/php /home2/b9g6c7m1/kinetica-repo/cron/send_notifications.php
+```
+
+Ogni iniezione e ogni allenamento possono avere `Notifica` e `Ripeti`: il cron invia solo dentro la finestra scelta e deduplica gli avvisi gia mandati.
 
 ## Import storico passi da CSV
 

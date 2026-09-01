@@ -13,7 +13,7 @@ use App\Support\Env;
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#071011">
   <meta name="vapid-public-key" content="<?= htmlspecialchars((string) Env::get('VAPID_PUBLIC_KEY', ''), ENT_QUOTES) ?>">
-  <title>Body Tracker</title>
+  <title>Kinetica</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/app.css">
@@ -24,7 +24,7 @@ use App\Support\Env;
   <a class="skip-link" href="#main">Vai al contenuto</a>
   <div id="loginView" class="login-shell" hidden>
     <form id="loginForm" class="login-card">
-      <div class="brand-mark" aria-hidden="true">BT</div>
+      <div class="brand-mark" aria-hidden="true">K</div>
       <h1>Accedi</h1>
       <p>Monitora peso, GLP-1, allenamenti e passi in un unico posto.</p>
       <label>Email <input name="email" type="email" autocomplete="email" required></label>
@@ -44,10 +44,13 @@ use App\Support\Env;
             <path d="M10 25h8l4-10 8 20 5-13 3 3h5"></path>
           </svg>
         </span>
-        <strong>Body Tracker</strong>
+        <strong>Kinetica</strong>
       </div>
       <nav id="sideNav"></nav>
-      <button id="logoutBtn" class="ghost-button">Esci</button>
+      <div class="sidebar-footer">
+        <button id="themeToggle" class="ghost-button">Tema chiaro</button>
+        <button id="logoutBtn" class="ghost-button">Esci</button>
+      </div>
     </aside>
 
     <main id="main" class="main-panel">
@@ -101,6 +104,24 @@ use App\Support\Env;
             <label>Farmaco <input name="medication_name" value="Mounjaro"></label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Dose (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
+            <label>Notifica
+              <select name="reminder_minutes_before">
+                <option value="1440">24 ore prima</option>
+                <option value="120">2 ore prima</option>
+                <option value="60">1 ora prima</option>
+                <option value="30">30 minuti prima</option>
+                <option value="15">15 minuti prima</option>
+                <option value="">Nessuna</option>
+              </select>
+            </label>
+            <label>Ripeti
+              <select name="reminder_repeat_minutes">
+                <option value="0">Non ripetere</option>
+                <option value="60">Ogni ora</option>
+                <option value="30">Ogni 30 minuti</option>
+                <option value="15">Ogni 15 minuti</option>
+              </select>
+            </label>
             <label class="check-row"><input name="completed" type="checkbox" value="1" checked> Segna anche come effettuata</label>
             <button type="submit">Salva iniezione</button>
           </form>
@@ -123,6 +144,24 @@ use App\Support\Env;
             </label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+            <label>Notifica
+              <select name="reminder_minutes_before">
+                <option value="60">1 ora prima</option>
+                <option value="120">2 ore prima</option>
+                <option value="30">30 minuti prima</option>
+                <option value="15">15 minuti prima</option>
+                <option value="1440">24 ore prima</option>
+                <option value="">Nessuna</option>
+              </select>
+            </label>
+            <label>Ripeti
+              <select name="reminder_repeat_minutes">
+                <option value="0">Non ripetere</option>
+                <option value="60">Ogni ora</option>
+                <option value="30">Ogni 30 minuti</option>
+                <option value="15">Ogni 15 minuti</option>
+              </select>
+            </label>
             <label class="check-row"><input name="completed" type="checkbox" value="1" checked> Segna anche come effettuato</label>
             <label>Note <textarea name="notes" rows="2"></textarea></label>
             <button type="submit">Salva allenamento</button>
@@ -195,6 +234,24 @@ use App\Support\Env;
               <label>Ora <input name="start_time" type="time" required></label>
               <label>Ricorrenza settimanale fino a <input name="recurrence_until" type="date"></label>
               <label>Dose prevista (mg) <input name="planned_dose_mg" type="number" min="0" step="0.1" required></label>
+              <label>Notifica
+                <select name="reminder_minutes_before">
+                  <option value="1440">24 ore prima</option>
+                  <option value="120">2 ore prima</option>
+                  <option value="60">1 ora prima</option>
+                  <option value="30">30 minuti prima</option>
+                  <option value="15">15 minuti prima</option>
+                  <option value="">Nessuna</option>
+                </select>
+              </label>
+              <label>Ripeti
+                <select name="reminder_repeat_minutes">
+                  <option value="0">Non ripetere</option>
+                  <option value="60">Ogni ora</option>
+                  <option value="30">Ogni 30 minuti</option>
+                  <option value="15">Ogni 15 minuti</option>
+                </select>
+              </label>
               <label class="notes-field">Note <textarea name="notes" rows="1"></textarea></label>
               <button type="submit">Programma calendario</button>
             </div>
@@ -225,6 +282,24 @@ use App\Support\Env;
               <label>Ora <input name="start_time" type="time" required></label>
               <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
               <label>Ricorrenza fino a <input name="recurrence_until" type="date"></label>
+              <label>Notifica
+                <select name="reminder_minutes_before">
+                  <option value="60">1 ora prima</option>
+                  <option value="120">2 ore prima</option>
+                  <option value="30">30 minuti prima</option>
+                  <option value="15">15 minuti prima</option>
+                  <option value="1440">24 ore prima</option>
+                  <option value="">Nessuna</option>
+                </select>
+              </label>
+              <label>Ripeti
+                <select name="reminder_repeat_minutes">
+                  <option value="0">Non ripetere</option>
+                  <option value="60">Ogni ora</option>
+                  <option value="30">Ogni 30 minuti</option>
+                  <option value="15">Ogni 15 minuti</option>
+                </select>
+              </label>
               <label>Giorni settimana
                 <select name="weekdays" multiple size="3" aria-label="Giorni ricorrenza">
                   <option value="1">Lunedì</option>
@@ -320,6 +395,24 @@ use App\Support\Env;
             </label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
+            <label>Notifica
+              <select name="reminder_minutes_before">
+                <option value="60">1 ora prima</option>
+                <option value="120">2 ore prima</option>
+                <option value="30">30 minuti prima</option>
+                <option value="15">15 minuti prima</option>
+                <option value="1440">24 ore prima</option>
+                <option value="">Nessuna</option>
+              </select>
+            </label>
+            <label>Ripeti
+              <select name="reminder_repeat_minutes">
+                <option value="0">Non ripetere</option>
+                <option value="60">Ogni ora</option>
+                <option value="30">Ogni 30 minuti</option>
+                <option value="15">Ogni 15 minuti</option>
+              </select>
+            </label>
             <label class="check-row"><input name="completed" type="checkbox" value="1"> Segna come effettuato</label>
             <button type="submit">Pianifica</button>
           </form>
@@ -327,6 +420,10 @@ use App\Support\Env;
         <div class="panel">
           <div class="section-head"><h2>Notifiche push</h2><button id="pushBtn">Attiva notifiche</button></div>
           <p class="muted">Promemoria reali per iniezioni e allenamenti programmati.</p>
+        </div>
+        <div class="panel">
+          <div class="section-head"><h2>Aspetto</h2><button id="themeToggleSettings" class="ghost-button" type="button">Tema chiaro</button></div>
+          <p class="muted">Alterna rapidamente tema scuro e tema chiaro.</p>
         </div>
         <div id="adminPanel" class="panel" hidden>
           <h2>Amministrazione</h2>

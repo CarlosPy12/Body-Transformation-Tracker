@@ -1,4 +1,4 @@
-const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', rangeStart: '', rangeEnd: '', metric: 'peso', dashboardMetric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
+const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', rangeStart: '', rangeEnd: '', metric: 'peso', dashboardMetric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false, theme: localStorage.getItem('kinetica-theme') || 'dark' };
 const sections = [
   ['aggiungi', 'Aggiungi attività', 'plus', 'Aggiungi'],
   ['riepilogo', 'Riepilogo', 'home'],
@@ -7,6 +7,12 @@ const sections = [
   ['risultati', 'Risultati', 'chart'],
   ['calendario', 'Calendario', 'calendar'],
   ['impostazioni', 'Impostazioni', 'settings']
+];
+const navGroups = [
+  { label: 'Azioni', items: ['aggiungi'] },
+  { label: 'Panoramica', items: ['riepilogo'] },
+  { label: 'Monitoraggio', items: ['iniezioni', 'attivita', 'risultati', 'calendario'] },
+  { label: 'Sistema', items: ['impostazioni'] }
 ];
 const metrics = {
   peso: 'Peso', bmi: 'BMI', massa_grassa: 'Massa grassa', muscoli: 'Muscoli', passi: 'Passi',
@@ -138,11 +144,15 @@ async function api(path, options = {}) {
 
 function initNav() {
   hoistEntryDialogs();
-  $('#sideNav').innerHTML = sections.map(([id, label, icon]) => navButton(id, label, icon)).join('');
+  $('#sideNav').innerHTML = navGroups.map(group => `<div class="nav-group"><span class="nav-group-title">${group.label}</span>${group.items.map(id => {
+    const section = sections.find(item => item[0] === id);
+    return section ? navButton(section[0], section[1], section[2]) : '';
+  }).join('')}</div>`).join('');
   $('#bottomNav').innerHTML = sections.map(([id, label, icon, shortLabel]) => navButton(id, shortLabel || label, icon, label)).join('');
   $('#sidebarToggle').innerHTML = iconSvg('chevronLeft');
   $('#prevMonthBtn').innerHTML = iconSvg('chevronLeft');
   $('#nextMonthBtn').innerHTML = iconSvg('chevronRight');
+  applyTheme(state.theme, false);
   document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
 }
 
@@ -316,8 +326,8 @@ function drawMetricChart(canvasId, data, label) {
     },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: '#cfe8e7' } }, tooltip: { intersect: false, mode: 'index' }, doseBadges: { badges: doseTimeline.badges } },
-      scales: { x: { ticks: { color: '#9dacb1', maxRotation: 0 }, grid: { color: 'rgba(255,255,255,.06)' } }, y: { ticks: { color: '#9dacb1' }, grid: { color: 'rgba(255,255,255,.08)' } } }
+      plugins: { legend: { labels: { color: cssVar('--text') } }, tooltip: { intersect: false, mode: 'index' }, doseBadges: { badges: doseTimeline.badges } },
+      scales: { x: { ticks: { color: cssVar('--muted'), maxRotation: 0 }, grid: { color: chartGridColor() } }, y: { ticks: { color: cssVar('--muted') }, grid: { color: chartGridColor() } } }
     }
   });
 }
@@ -585,6 +595,8 @@ function setupAppForms() {
   });
   $('#rangeStart').addEventListener('change', updateDateRange);
   $('#rangeEnd').addEventListener('change', updateDateRange);
+  $('#themeToggle')?.addEventListener('click', toggleTheme);
+  $('#themeToggleSettings')?.addEventListener('click', toggleTheme);
 }
 
 function toggleSidebar() {
@@ -593,6 +605,31 @@ function toggleSidebar() {
   $('#sidebarToggle').innerHTML = iconSvg(state.sidebarCollapsed ? 'chevronRight' : 'chevronLeft');
   $('#sidebarToggle').setAttribute('aria-label', state.sidebarCollapsed ? 'Espandi menu' : 'Comprimi menu');
   $('#sidebarToggle').setAttribute('aria-expanded', String(!state.sidebarCollapsed));
+}
+
+function toggleTheme() {
+  applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+}
+
+function applyTheme(theme, refreshCharts = true) {
+  state.theme = theme === 'light' ? 'light' : 'dark';
+  localStorage.setItem('kinetica-theme', state.theme);
+  document.body.classList.toggle('theme-light', state.theme === 'light');
+  const label = state.theme === 'light' ? 'Tema scuro' : 'Tema chiaro';
+  $('#themeToggle') && ($('#themeToggle').textContent = label);
+  $('#themeToggleSettings') && ($('#themeToggleSettings').textContent = label);
+  if (refreshCharts && state.user) {
+    loadDashboard();
+    if (state.active === 'risultati') loadResults();
+  }
+}
+
+function cssVar(name) {
+  return getComputedStyle(document.body).getPropertyValue(name).trim() || getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#f3fbfa';
+}
+
+function chartGridColor() {
+  return document.body.classList.contains('theme-light') ? 'rgba(16,32,34,.1)' : 'rgba(255,255,255,.08)';
 }
 
 async function openDayDialog(dialogId, day) {
@@ -652,12 +689,16 @@ function populateEventForm(form, event) {
     setFormValue(form, 'medication_name', event.medication_name || 'Mounjaro');
     setFormValue(form, 'scheduled_at', inputDateTime(event.scheduled_at));
     setFormValue(form, 'planned_dose_mg', event.planned_dose_mg ?? '');
+    setFormValue(form, 'reminder_minutes_before', event.reminder_minutes_before ?? 1440);
+    setFormValue(form, 'reminder_repeat_minutes', event.reminder_repeat_minutes ?? 0);
     setFormChecked(form, 'completed', event.status === 'completed');
   }
   if (event.type === 'allenamento') {
     setFormValue(form, 'workout_type', workoutTypeMeta(event.workout_type).label);
     setFormValue(form, 'scheduled_at', inputDateTime(event.scheduled_at));
     setFormValue(form, 'duration_minutes', event.duration_minutes ?? '');
+    setFormValue(form, 'reminder_minutes_before', event.reminder_minutes_before ?? 60);
+    setFormValue(form, 'reminder_repeat_minutes', event.reminder_repeat_minutes ?? 0);
     setFormChecked(form, 'completed', event.status === 'completed');
   }
   if (event.type === 'passi') {
@@ -785,6 +826,7 @@ function populateControls() {
     loadDashboard();
     if (state.active === 'risultati') loadResults();
     if (state.active === 'iniezioni') loadInjections();
+    if (state.active === 'attivita') loadActivities();
   }));
   $('#calendarLegend').innerHTML = Object.entries(eventTypes).map(([type, meta]) => `<span>${eventIcon(type, meta.shortLabel)} ${meta.shortLabel}</span>`).join('');
 }

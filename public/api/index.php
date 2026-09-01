@@ -337,8 +337,11 @@ try {
         $dose = decimal_or_null($input['planned_dose_mg'] ?? null) ?? 0.0;
         $status = !empty($input['completed']) ? 'completed' : 'scheduled';
         $dates = injection_schedule_dates($input);
+        $reminders = reminder_payload($pdo, 'glp1_injections', $input, 1440);
+        $columns = array_merge(['user_id', 'medication_id', 'scheduled_at', 'administered_at', 'planned_dose_mg', 'administered_dose_mg', 'status', 'notes'], array_keys($reminders));
+        $marks = implode(', ', array_fill(0, count($columns), '?'));
         $exists = $pdo->prepare('SELECT id FROM glp1_injections WHERE user_id = ? AND medication_id = ? AND scheduled_at = ? AND planned_dose_mg = ? LIMIT 1');
-        $stmt = $pdo->prepare('INSERT INTO glp1_injections(user_id, medication_id, scheduled_at, administered_at, planned_dose_mg, administered_dose_mg, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO glp1_injections(' . implode(', ', $columns) . ") VALUES ({$marks})");
         $created = 0;
         $skipped = 0;
         foreach ($dates as $scheduledAt) {
@@ -349,7 +352,7 @@ try {
             }
             $administeredAt = $status === 'completed' ? $scheduledAt : null;
             $administeredDose = $status === 'completed' ? $dose : null;
-            $stmt->execute([$user['id'], $med, $scheduledAt, $administeredAt, $dose, $administeredDose, $status, $input['notes'] ?? null]);
+            $stmt->execute(array_merge([$user['id'], $med, $scheduledAt, $administeredAt, $dose, $administeredDose, $status, $input['notes'] ?? null], array_values($reminders)));
             $created++;
         }
         Response::ok(['created' => $created, 'skipped' => $skipped]);
@@ -372,8 +375,13 @@ try {
         $status = !empty($input['completed']) ? 'completed' : 'scheduled';
         $administeredAt = $status === 'completed' ? $scheduledAt : null;
         $administeredDose = $status === 'completed' ? $dose : null;
-        $stmt = $pdo->prepare('UPDATE glp1_injections SET medication_id = ?, scheduled_at = ?, administered_at = ?, planned_dose_mg = ?, administered_dose_mg = ?, status = ?, notes = ? WHERE id = ? AND user_id = ?');
-        $stmt->execute([$med, $scheduledAt, $administeredAt, $dose, $administeredDose, $status, $input['notes'] ?? null, (int) $m[1], $user['id']]);
+        $reminders = reminder_payload($pdo, 'glp1_injections', $input, 1440);
+        $assignments = ['medication_id = ?', 'scheduled_at = ?', 'administered_at = ?', 'planned_dose_mg = ?', 'administered_dose_mg = ?', 'status = ?', 'notes = ?'];
+        foreach (array_keys($reminders) as $column) {
+            $assignments[] = $column . ' = ?';
+        }
+        $stmt = $pdo->prepare('UPDATE glp1_injections SET ' . implode(', ', $assignments) . ' WHERE id = ? AND user_id = ?');
+        $stmt->execute(array_merge([$med, $scheduledAt, $administeredAt, $dose, $administeredDose, $status, $input['notes'] ?? null], array_values($reminders), [(int) $m[1], $user['id']]));
         Response::ok(['updated' => $stmt->rowCount()]);
         return;
     }
@@ -413,8 +421,11 @@ try {
         $dates = workout_schedule_dates($input);
         $completed = !empty($input['completed']);
         $status = $completed ? 'completed' : 'scheduled';
+        $reminders = reminder_payload($pdo, 'workout_sessions', $input, 60);
+        $columns = array_merge(['user_id', 'scheduled_at', 'completed_at', 'workout_type', 'duration_minutes', 'status', 'notes'], array_keys($reminders));
+        $marks = implode(', ', array_fill(0, count($columns), '?'));
         $exists = $pdo->prepare('SELECT id FROM workout_sessions WHERE user_id = ? AND scheduled_at = ? AND workout_type = ? LIMIT 1');
-        $stmt = $pdo->prepare('INSERT INTO workout_sessions(user_id, scheduled_at, completed_at, workout_type, duration_minutes, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO workout_sessions(' . implode(', ', $columns) . ") VALUES ({$marks})");
         $created = 0;
         $skipped = 0;
         foreach ($dates as $scheduledAt) {
@@ -424,7 +435,7 @@ try {
                 continue;
             }
             $completedAt = $completed ? $scheduledAt : null;
-            $stmt->execute([$user['id'], $scheduledAt, $completedAt, $input['workout_type'] ?? 'Allenamento', int_or_null($input['duration_minutes'] ?? null), $status, $input['notes'] ?? null]);
+            $stmt->execute(array_merge([$user['id'], $scheduledAt, $completedAt, $input['workout_type'] ?? 'Allenamento', int_or_null($input['duration_minutes'] ?? null), $status, $input['notes'] ?? null], array_values($reminders)));
             $created++;
         }
         Response::ok(['id' => (int) $pdo->lastInsertId(), 'created' => $created, 'skipped' => $skipped]);
@@ -443,8 +454,13 @@ try {
         require_csrf($auth);
         $scheduledAt = normalize_measured_at(str_replace('T', ' ', (string) ($input['scheduled_at'] ?? date('Y-m-d H:i:s'))));
         $completed = !empty($input['completed']);
-        $stmt = $pdo->prepare('UPDATE workout_sessions SET scheduled_at = ?, completed_at = ?, workout_type = ?, duration_minutes = ?, status = ?, notes = ? WHERE id = ? AND user_id = ?');
-        $stmt->execute([$scheduledAt, $completed ? $scheduledAt : null, $input['workout_type'] ?? 'Allenamento', int_or_null($input['duration_minutes'] ?? null), $completed ? 'completed' : 'scheduled', $input['notes'] ?? null, (int) $m[1], $user['id']]);
+        $reminders = reminder_payload($pdo, 'workout_sessions', $input, 60);
+        $assignments = ['scheduled_at = ?', 'completed_at = ?', 'workout_type = ?', 'duration_minutes = ?', 'status = ?', 'notes = ?'];
+        foreach (array_keys($reminders) as $column) {
+            $assignments[] = $column . ' = ?';
+        }
+        $stmt = $pdo->prepare('UPDATE workout_sessions SET ' . implode(', ', $assignments) . ' WHERE id = ? AND user_id = ?');
+        $stmt->execute(array_merge([$scheduledAt, $completed ? $scheduledAt : null, $input['workout_type'] ?? 'Allenamento', int_or_null($input['duration_minutes'] ?? null), $completed ? 'completed' : 'scheduled', $input['notes'] ?? null], array_values($reminders), [(int) $m[1], $user['id']]));
         Response::ok(['updated' => $stmt->rowCount()]);
         return;
     }
@@ -514,6 +530,30 @@ function int_or_null(mixed $value): ?int
         return null;
     }
     return max(0, (int) $value);
+}
+
+function table_has_column(PDO $pdo, string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$table, $column]);
+    return $cache[$key] = ((int) $stmt->fetchColumn() > 0);
+}
+
+function reminder_payload(PDO $pdo, string $table, array $input, int $defaultBefore): array
+{
+    $payload = [];
+    if (table_has_column($pdo, $table, 'reminder_minutes_before')) {
+        $payload['reminder_minutes_before'] = int_or_null($input['reminder_minutes_before'] ?? null) ?? $defaultBefore;
+    }
+    if (table_has_column($pdo, $table, 'reminder_repeat_minutes')) {
+        $payload['reminder_repeat_minutes'] = int_or_null($input['reminder_repeat_minutes'] ?? null) ?? 0;
+    }
+    return $payload;
 }
 
 function normalize_date(string $value): string
