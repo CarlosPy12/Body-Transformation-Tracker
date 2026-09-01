@@ -75,6 +75,12 @@ const eventTypes = {
   allenamento: { label: 'Allenamento', shortLabel: 'Allenamento', icon: 'dumbbell', className: 'allenamento' },
   passi: { label: 'Passi', shortLabel: 'Passi', icon: 'footsteps', className: 'passi' }
 };
+const workoutTypes = {
+  forza: { label: 'Allenamento forza', icon: 'dumbbell' },
+  fisioterapia: { label: 'Fisioterapia', icon: 'physio' },
+  basket: { label: 'Basket', icon: 'basketball' },
+  altro: { label: 'Altro', icon: 'target' }
+};
 
 const fmt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 });
 const fmtInt = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
@@ -130,12 +136,20 @@ async function api(path, options = {}) {
 }
 
 function initNav() {
+  hoistEntryDialogs();
   $('#sideNav').innerHTML = sections.map(([id, label, icon]) => navButton(id, label, icon)).join('');
   $('#bottomNav').innerHTML = sections.map(([id, label, icon, shortLabel]) => navButton(id, shortLabel || label, icon, label)).join('');
   $('#sidebarToggle').innerHTML = iconSvg('chevronLeft');
   $('#prevMonthBtn').innerHTML = iconSvg('chevronLeft');
   $('#nextMonthBtn').innerHTML = iconSvg('chevronRight');
   document.querySelectorAll('.nav-button').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
+}
+
+function hoistEntryDialogs() {
+  const shell = $('#appShell');
+  document.querySelectorAll('dialog.entry-dialog').forEach(dialog => {
+    if (shell && dialog.parentElement !== shell) shell.appendChild(dialog);
+  });
 }
 
 function navButton(id, label, icon, ariaLabel = label) {
@@ -195,14 +209,30 @@ function combinedActivityCard(data) {
   const stepsTarget = Number(data.steps_target || 10000);
   const stepsToday = Number(data.steps_today || 0);
   const stepProgress = Math.max(0, Math.min(100, stepsTarget ? (stepsToday / stepsTarget) * 100 : 0));
-  const completed = Number(data.completed_workouts_week || 0);
-  const scheduled = Number(data.scheduled_workouts_week || 0);
-  const workoutTotal = Math.max(completed, scheduled);
-  const workoutProgress = Math.max(0, Math.min(100, workoutTotal ? (completed / workoutTotal) * 100 : 0));
+  const workoutCounts = data.workout_counts_week || [];
   return `<article class="panel combo-card activity-card">
     <div class="combo-cell">${miniLabel('Passi oggi', fmtInt.format(stepsToday), `Obiettivo ${fmtInt.format(stepsTarget)}`, 'footsteps', 'var(--teal)')}<span class="progress-track"><i style="width:${stepProgress}%"></i></span></div>
-    <div class="combo-cell">${miniLabel('Allenamenti settimana', `${fmtInt.format(completed)} / ${fmtInt.format(workoutTotal)}`, 'Completati vs programmati', 'dumbbell', 'var(--lime)')}<span class="progress-track lime"><i style="width:${workoutProgress}%"></i></span></div>
+    <div class="workout-kpi-strip">${renderWorkoutKpis(workoutCounts)}</div>
   </article>`;
+}
+
+function renderWorkoutKpis(rows) {
+  const byKey = new Map();
+  rows.forEach(row => {
+    const key = workoutTypeKey(row.workout_type);
+    const current = byKey.get(key) || { completed: 0, scheduled: 0 };
+    current.completed += Number(row.completed || 0);
+    current.scheduled += Number(row.scheduled || 0);
+    byKey.set(key, current);
+  });
+  return ['forza', 'basket', 'fisioterapia'].map(key => {
+    const meta = workoutTypes[key];
+    const row = byKey.get(key) || {};
+    const completed = Number(row.completed || 0);
+    const scheduled = Number(row.scheduled || 0);
+    const total = Math.max(completed, scheduled);
+    return `<div class="workout-kpi" style="--accent:var(--lime)"><span class="event-icon allenamento">${iconSvg(meta.icon)}</span><span>${meta.label}</span><strong>${fmtInt.format(completed)} / ${fmtInt.format(total)}</strong></div>`;
+  }).join('');
 }
 
 function miniLabel(label, value, detail, icon, accent) {
@@ -374,7 +404,7 @@ function renderWorkoutTable(rows) {
   const body = rows.map(row => {
     const scheduled = new Date(row.scheduled_at.replace(' ', 'T'));
     return `<tr>
-      <td>${row.workout_type}</td>
+      <td>${workoutTypeMeta(row.workout_type).label}</td>
       <td data-value="${row.scheduled_at}">${dateOnly(row.scheduled_at)}</td>
       <td>${timeOnly(scheduled)}</td>
       <td data-value="${Number(row.duration_minutes || 0)}">${row.duration_minutes ? `${fmtInt.format(row.duration_minutes)} min` : 'N/D'}</td>
@@ -438,7 +468,7 @@ async function loadCalendar() {
     const day = String(i + 1).padStart(2, '0');
     const key = `${month}-${day}`;
     const events = byDay[key] || [];
-    const icons = events.map(e => eventIcon(e.type, eventText(e))).join('');
+    const icons = events.map(e => eventIcon(e.type, eventText(e), e)).join('');
     return `<div class="day"><button data-day="${key}"><strong>${i + 1}</strong><span class="calendar-events">${icons}</span></button></div>`;
   }).join('');
   document.querySelectorAll('[data-day]').forEach(btn => btn.addEventListener('click', () => {
@@ -458,7 +488,7 @@ function renderDayDetails(day, events) {
     const key = `${e.type}-${e.id}`;
     calendarEventStore.set(key, e);
     return `<div class="day-event">
-      <button type="button" class="day-event-main" data-edit-event="${key}">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span></button>
+      <button type="button" class="day-event-main" data-edit-event="${key}">${eventIcon(e.type, eventLabel(e), e)}<span><strong>${eventLabel(e, e)}</strong><br><span class="muted">${eventText(e)}</span></span></button>
       ${calendarEventAction(e)}
     </div>`;
   }).join('') || '<p class="muted">Nessun evento.</p>') + '</div>';
@@ -560,6 +590,7 @@ async function openDayDialog(dialogId, day) {
 }
 
 async function openEventEditDialog(event) {
+  if (!event) return;
   await loadEntryDefaults();
   const dialogMap = {
     misurazione: 'quickMeasurementDialog',
@@ -603,7 +634,7 @@ function populateEventForm(form, event) {
     setFormChecked(form, 'completed', event.status === 'completed');
   }
   if (event.type === 'allenamento') {
-    setFormValue(form, 'workout_type', event.workout_type || '');
+    setFormValue(form, 'workout_type', workoutTypeMeta(event.workout_type).label);
     setFormValue(form, 'scheduled_at', inputDateTime(event.scheduled_at));
     setFormValue(form, 'duration_minutes', event.duration_minutes ?? '');
     setFormChecked(form, 'completed', event.status === 'completed');
@@ -632,6 +663,7 @@ async function completeCalendarEvent(type, id) {
   loadCalendar();
   loadDashboard();
   if (state.active === 'iniezioni') loadInjections();
+  if (state.active === 'attivita') loadActivities();
 }
 
 function submitJson(path, after, serializer = form => Object.fromEntries(new FormData(form))) {
@@ -715,7 +747,7 @@ function populateControls() {
     document.querySelectorAll('[data-dashboard-metric]').forEach(item => item.classList.toggle('active', item === btn));
     loadDashboard();
   }));
-  const ranges = [['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
+  const ranges = [['1w', '1 settimana'], ['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
   $('#topRangeTabs').innerHTML = ranges.map(([k, v]) => `<button type="button" data-top-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
   document.querySelectorAll('[data-top-range]').forEach(btn => btn.addEventListener('click', () => {
     if (btn.dataset.topRange !== 'custom') {
@@ -764,6 +796,7 @@ function applyPresetRange(range) {
   const end = new Date();
   const start = new Date(end);
   if (range === '1m') start.setMonth(start.getMonth() - 1);
+  if (range === '1w') start.setDate(start.getDate() - 7);
   if (range === '3m') start.setMonth(start.getMonth() - 3);
   if (range === '6m') start.setMonth(start.getMonth() - 6);
   if (range === '1y') start.setFullYear(start.getFullYear() - 1);
@@ -972,6 +1005,16 @@ function kpiIcon(key) {
   if (key.includes('minimo') || key.includes('massimo')) return 'chart';
   return 'weight';
 }
+function workoutTypeKey(value) {
+  const text = String(value || '').trim().toLocaleLowerCase('it-IT');
+  if (text.includes('fisi')) return 'fisioterapia';
+  if (text.includes('basket')) return 'basket';
+  if (text.includes('forza') || text === 'forza') return 'forza';
+  return 'altro';
+}
+function workoutTypeMeta(value) {
+  return workoutTypes[workoutTypeKey(value)] || workoutTypes.altro;
+}
 function inputValue(value, type) {
   if (value === null || value === undefined) return '';
   if (type === 'datetime-local') return String(value).slice(0, 16).replace(' ', 'T');
@@ -998,21 +1041,24 @@ function iconSvg(name) {
     fat: '<svg viewBox="0 0 24 24"><path d="M12 3c3 3.2 6 6.8 6 10.5a6 6 0 0 1-12 0C6 9.8 9 6.2 12 3Z"></path><path d="M9.5 13.5h5"></path><path d="M12 11v5"></path></svg>',
     target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path></svg>',
     footsteps: '<svg viewBox="0 0 24 24"><path d="M7.5 13.5c1.5 0 2.5 1.2 2.5 2.8 0 2-1.1 3.7-2.8 3.7-1.4 0-2.4-1.1-2.4-2.7 0-1.9 1-3.8 2.7-3.8Z"></path><path d="M16.5 4c1.5 0 2.5 1.2 2.5 2.8 0 2-1.1 3.7-2.8 3.7-1.4 0-2.4-1.1-2.4-2.7C13.8 5.9 14.8 4 16.5 4Z"></path></svg>',
-    dumbbell: '<svg viewBox="0 0 24 24"><path d="M6 7v10"></path><path d="M18 7v10"></path><path d="M3 9v6"></path><path d="M21 9v6"></path><path d="M6 12h12"></path></svg>'
+    dumbbell: '<svg viewBox="0 0 24 24"><path d="M6 7v10"></path><path d="M18 7v10"></path><path d="M3 9v6"></path><path d="M21 9v6"></path><path d="M6 12h12"></path></svg>',
+    basketball: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"></circle><path d="M4.2 9.2c4.2 1.2 8.4 1.2 15.6 0"></path><path d="M4.2 14.8c4.2-1.2 8.4-1.2 15.6 0"></path><path d="M12 3.5c-2 2.1-3 5-3 8.5s1 6.4 3 8.5"></path><path d="M12 3.5c2 2.1 3 5 3 8.5s-1 6.4-3 8.5"></path></svg>',
+    physio: '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"></circle><path d="M6 21c1.1-3.8 3.1-6 6-6s4.9 2.2 6 6"></path><path d="M8 11h8"></path><path d="M12 7.5V15"></path><path d="m9 14-3 3"></path><path d="m15 14 3 3"></path></svg>'
   };
   return icons[name] || '';
 }
 function statusIt(s) { return ({ scheduled: 'Programmata', completed: 'Effettuata', missed: 'Mancata', skipped: 'Saltata', cancelled: 'Annullata' })[s] || s; }
-function eventIcon(type, label) {
+function eventIcon(type, label, event = null) {
   const meta = eventTypes[type] || eventTypes.misurazione;
-  return `<span class="event-icon ${meta.className}" title="${label}" aria-label="${label}">${iconSvg(meta.icon)}</span>`;
+  const icon = type === 'allenamento' && event ? workoutTypeMeta(event.workout_type).icon : meta.icon;
+  return `<span class="event-icon ${meta.className}" title="${label}" aria-label="${label}">${iconSvg(icon)}</span>`;
 }
-function eventLabel(e) { return (eventTypes[e.type] || {}).label || e.type; }
+function eventLabel(e) { return e?.type === 'allenamento' ? workoutTypeMeta(e.workout_type).label : ((eventTypes[e.type] || {}).label || e.type); }
 function eventText(e) {
   if (e.type === 'misurazione') return `${fmt.format(e.weight_kg)} kg`;
   if (e.type === 'iniezione') return `${fmt.format(e.planned_dose_mg)} mg · ${statusIt(e.status)}`;
   if (e.type === 'passi') return `${fmtInt.format(e.steps)} passi`;
-  return `${e.workout_type} · ${statusIt(e.status)}`;
+  return `${workoutTypeMeta(e.workout_type).label} · ${statusIt(e.status)}`;
 }
 function calendarEventAction(e) {
   if ((e.type === 'iniezione' || e.type === 'allenamento') && e.status === 'scheduled') {

@@ -113,7 +113,7 @@ use App\Support\Env;
               <h2>Allenamento</h2>
               <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
             </div>
-            <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
+            <label>Tipo <input name="workout_type" list="workoutTypes" value="Allenamento forza" required></label>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
             <label class="check-row"><input name="completed" type="checkbox" value="1" checked> Segna anche come effettuato</label>
@@ -172,6 +172,7 @@ use App\Support\Env;
           <div class="section-head">
             <h2>Andamento peso</h2>
             <select id="dashboardRange" aria-label="Intervallo grafico riepilogo">
+              <option value="1w">1 settimana</option>
               <option value="1m">1 mese</option>
               <option value="3m" selected>3 mesi</option>
               <option value="6m">6 mesi</option>
@@ -211,7 +212,7 @@ use App\Support\Env;
           <form id="activityWorkoutForm" class="panel form-panel horizontal-form">
             <h2>Programma allenamento</h2>
             <div class="injection-form-grid activity-form-grid">
-              <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
+              <label>Tipo <input name="workout_type" list="workoutTypes" value="Allenamento forza" required></label>
               <label>Data partenza <input name="start_date" type="date" required></label>
               <label>Ora <input name="start_time" type="time" required></label>
               <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
@@ -301,8 +302,8 @@ use App\Support\Env;
           </form>
           <form id="workoutForm" class="panel form-panel">
             <h2>Pianifica allenamento</h2>
-            <label>Tipo <input name="workout_type" list="workoutTypes" required></label>
-            <datalist id="workoutTypes"><option>Forza</option><option>Cardio</option><option>Corsa</option><option>Camminata</option><option>Mobilità</option><option>Altro</option></datalist>
+            <label>Tipo <input name="workout_type" list="workoutTypes" value="Allenamento forza" required></label>
+            <datalist id="workoutTypes"><option>Allenamento forza</option><option>Fisioterapia</option><option>Basket</option><option>Altro</option></datalist>
             <label>Data e ora <input name="scheduled_at" type="datetime-local" required></label>
             <label>Durata (minuti) <input name="duration_minutes" type="number" min="1"></label>
             <label class="check-row"><input name="completed" type="checkbox" value="1"> Segna come effettuato</label>

@@ -37,6 +37,7 @@ final class ResultsService
     {
         $now = new DateTimeImmutable('now');
         return match ($range) {
+            '1w' => $now->sub(new DateInterval('P7D'))->format('Y-m-d 00:00:00'),
             '1m' => $now->sub(new DateInterval('P1M'))->format('Y-m-d 00:00:00'),
             '3m' => $now->sub(new DateInterval('P3M'))->format('Y-m-d 00:00:00'),
             '6m' => $now->sub(new DateInterval('P6M'))->format('Y-m-d 00:00:00'),

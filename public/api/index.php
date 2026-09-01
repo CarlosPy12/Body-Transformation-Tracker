@@ -82,6 +82,8 @@ try {
         $workouts->execute([$user['id']]);
         $plannedWorkouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND scheduled_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND scheduled_at <= UTC_TIMESTAMP() + INTERVAL 7 DAY');
         $plannedWorkouts->execute([$user['id']]);
+        $workoutCounts = $pdo->prepare('SELECT workout_type, SUM(status = "completed") AS completed, COUNT(*) AS scheduled FROM workout_sessions WHERE user_id = ? AND scheduled_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND scheduled_at <= UTC_TIMESTAMP() + INTERVAL 7 DAY GROUP BY workout_type ORDER BY workout_type');
+        $workoutCounts->execute([$user['id']]);
         Response::ok([
             'latest_measurement' => $latest,
             'metric_summary' => $metricSummary,
@@ -92,6 +94,7 @@ try {
             'injection_counts' => $injectionCounts->fetchAll(),
             'completed_workouts_week' => (int) $workouts->fetchColumn(),
             'scheduled_workouts_week' => (int) $plannedWorkouts->fetchColumn(),
+            'workout_counts_week' => $workoutCounts->fetchAll(),
         ]);
         return;
     }
