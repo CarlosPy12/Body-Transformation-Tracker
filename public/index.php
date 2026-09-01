@@ -92,6 +92,7 @@ use App\Support\Env;
 
         <dialog id="quickInjectionDialog" class="entry-dialog">
           <form id="quickInjectionForm" class="form-panel" method="dialog">
+            <input name="id" type="hidden">
             <div class="dialog-head">
               <h2>Iniezione Mounjaro</h2>
               <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
@@ -106,6 +107,7 @@ use App\Support\Env;
 
         <dialog id="quickWorkoutDialog" class="entry-dialog">
           <form id="quickWorkoutForm" class="form-panel" method="dialog">
+            <input name="id" type="hidden">
             <div class="dialog-head">
               <h2>Allenamento</h2>
               <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
@@ -133,6 +135,7 @@ use App\Support\Env;
 
         <dialog id="quickStepsDialog" class="entry-dialog">
           <form id="quickStepsForm" class="form-panel" method="dialog">
+            <input name="id" type="hidden">
             <div class="dialog-head">
               <h2>Passi</h2>
               <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
@@ -145,6 +148,7 @@ use App\Support\Env;
 
         <dialog id="quickMeasurementDialog" class="entry-dialog">
           <form id="quickMeasurementForm" class="form-panel" method="dialog">
+            <input name="id" type="hidden">
             <div class="dialog-head">
               <h2>Misurazione corporea</h2>
               <button class="ghost-button icon-button" type="button" data-close-dialog>×</button>
@@ -161,6 +165,7 @@ use App\Support\Env;
       </section>
 
       <section id="riepilogo" class="view active-view" aria-labelledby="pageTitle">
+        <div class="metric-toggle" id="dashboardMetricToggle" aria-label="Obiettivo riepilogo"></div>
         <div class="summary-stack" id="dashboardCards"></div>
         <section class="panel wide chart-panel">
           <div class="section-head">

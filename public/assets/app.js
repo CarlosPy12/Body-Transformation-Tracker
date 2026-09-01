@@ -1,4 +1,4 @@
-const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', rangeStart: '', rangeEnd: '', metric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
+const state = { user: null, csrf: null, active: 'riepilogo', range: '3m', rangeStart: '', rangeEnd: '', metric: 'peso', dashboardMetric: 'peso', charts: {}, deferredInstall: null, sidebarCollapsed: false };
 const sections = [
   ['aggiungi', 'Aggiungi attività', 'plus', 'Aggiungi'],
   ['riepilogo', 'Riepilogo', 'home'],
@@ -25,6 +25,26 @@ const metricUnits = {
   gamba_dx_massa_grassa: '%', gamba_dx_muscoli: '%',
   tronco_massa_grassa: '%', tronco_muscoli: '%',
   passi: 'passi'
+};
+const dashboardMetrics = ['peso', 'bmi', 'massa_grassa', 'muscoli'];
+const dashboardMetricAccents = { peso: 'var(--teal)', bmi: 'var(--teal)', massa_grassa: 'var(--coral)', muscoli: 'var(--lime)' };
+const measurementFieldMap = {
+  peso: 'weight_kg',
+  bmi: 'bmi',
+  massa_grassa: 'body_fat',
+  acqua: 'body_water',
+  muscoli: 'muscle',
+  eta_metabolica: 'metabolic_age',
+  braccio_sx_massa_grassa: 'left_arm_body_fat',
+  braccio_sx_muscoli: 'left_arm_muscle',
+  braccio_dx_massa_grassa: 'right_arm_body_fat',
+  braccio_dx_muscoli: 'right_arm_muscle',
+  gamba_sx_massa_grassa: 'left_leg_body_fat',
+  gamba_sx_muscoli: 'left_leg_muscle',
+  gamba_dx_massa_grassa: 'right_leg_body_fat',
+  gamba_dx_muscoli: 'right_leg_muscle',
+  tronco_massa_grassa: 'trunk_body_fat',
+  tronco_muscoli: 'trunk_muscle'
 };
 const measurementColumns = [
   ['measured_at', 'Data e ora', 'datetime-local'],
@@ -145,23 +165,44 @@ function card(label, value, delta = '', accent = 'var(--teal)', icon = '') {
 async function loadDashboard() {
   const data = await api('dashboard');
   const summary = data.metric_summary || {};
-  const [pesoResults, bmiResults, fatResults] = await Promise.all([
-    api(`results&metric=peso&range=${state.range}${rangeQuery()}`),
-    api(`results&metric=bmi&range=${state.range}${rangeQuery()}`),
-    api(`results&metric=massa_grassa&range=${state.range}${rangeQuery()}`)
-  ]);
+  const selectedMetric = state.dashboardMetric || 'peso';
+  const selectedResults = await api(`results&metric=${selectedMetric}&range=${state.range}${rangeQuery()}`);
   $('#dashboardCards').innerHTML = [
-    metricRow('Peso', 'peso', summary.peso, pesoResults.kpi || {}, 'var(--teal)'),
-    metricRow('BMI', 'bmi', summary.bmi, bmiResults.kpi || {}, 'var(--teal)'),
-    metricRow('Massa grassa', 'massa_grassa', summary.massa_grassa, fatResults.kpi || {}, 'var(--coral)'),
-    '<div class="metric-grid">',
-    card('Dose GLP-1 attuale', data.next_injection ? `${fmt.format(data.next_injection.planned_dose_mg)} mg` : 'N/D', 'Prossima programmata', 'var(--violet)', 'syringe'),
-    card('Prossima iniezione', data.next_injection ? dateTime(data.next_injection.scheduled_at) : 'Nessuna', '', 'var(--violet)', 'calendar'),
-    card('Passi oggi', fmtInt.format(data.steps_today), 'Obiettivo 10.000', 'var(--teal)', 'footsteps'),
-    card('Allenamenti settimana', fmtInt.format(data.completed_workouts_week), 'Completati', 'var(--lime)', 'dumbbell'),
-    '</div>'
+    metricRow(metrics[selectedMetric], selectedMetric, summary[selectedMetric], selectedResults.kpi || {}, dashboardMetricAccents[selectedMetric] || 'var(--teal)'),
+    combinedGlpCard(data),
+    combinedActivityCard(data)
   ].join('');
-  drawMetricChart('overviewChart', pesoResults, 'Peso');
+  drawMetricChart('overviewChart', selectedResults, metrics[selectedMetric]);
+}
+
+function combinedGlpCard(data) {
+  const counts = data.injection_counts || [];
+  const countText = counts.length
+    ? counts.map(row => `${fmt.format(row.dose_mg)} mg: ${fmtInt.format(row.total)}`).join(' · ')
+    : 'Nessuna dose effettuata';
+  return `<article class="panel combo-card glp-card">
+    <div class="combo-cell">${miniLabel('Dose GLP-1 attuale', data.current_injection ? `${fmt.format(data.current_injection.dose_mg)} mg` : 'N/D', 'Ultima effettuata', 'syringe', 'var(--violet)')}</div>
+    <div class="combo-cell">${miniLabel('Prossima iniezione', data.next_injection ? dateTime(data.next_injection.scheduled_at) : 'Nessuna', data.next_injection ? `${fmt.format(data.next_injection.planned_dose_mg)} mg programmati` : '', 'calendar', 'var(--violet)')}</div>
+    <div class="combo-cell">${miniLabel('Iniezioni fatte', countText, 'Conteggio per dosaggio', 'chart', 'var(--violet)')}</div>
+  </article>`;
+}
+
+function combinedActivityCard(data) {
+  const stepsTarget = Number(data.steps_target || 10000);
+  const stepsToday = Number(data.steps_today || 0);
+  const stepProgress = Math.max(0, Math.min(100, stepsTarget ? (stepsToday / stepsTarget) * 100 : 0));
+  const completed = Number(data.completed_workouts_week || 0);
+  const scheduled = Number(data.scheduled_workouts_week || 0);
+  const workoutTotal = Math.max(completed, scheduled);
+  const workoutProgress = Math.max(0, Math.min(100, workoutTotal ? (completed / workoutTotal) * 100 : 0));
+  return `<article class="panel combo-card activity-card">
+    <div class="combo-cell">${miniLabel('Passi oggi', fmtInt.format(stepsToday), `Obiettivo ${fmtInt.format(stepsTarget)}`, 'footsteps', 'var(--teal)')}<span class="progress-track"><i style="width:${stepProgress}%"></i></span></div>
+    <div class="combo-cell">${miniLabel('Allenamenti settimana', `${fmtInt.format(completed)} / ${fmtInt.format(workoutTotal)}`, 'Completati vs programmati', 'dumbbell', 'var(--lime)')}<span class="progress-track lime"><i style="width:${workoutProgress}%"></i></span></div>
+  </article>`;
+}
+
+function miniLabel(label, value, detail, icon, accent) {
+  return `<div class="mini-metric" style="--accent:${accent}"><span class="card-icon" aria-hidden="true">${iconSvg(icon)}</span><div><span class="label">${label}</span><strong>${value}</strong>${detail ? `<small>${detail}</small>` : ''}</div></div>`;
 }
 
 function metricRow(title, metric, data = {}, kpi = {}, accent = 'var(--teal)') {
@@ -354,9 +395,13 @@ function renderDayDetails(day, events) {
     <button type="button" class="ghost-button" data-day-dialog="quickInjectionDialog" data-day="${day}">${eventIcon('iniezione', 'Iniezione')} Iniezione</button>
     <button type="button" class="ghost-button" data-day-dialog="quickWorkoutDialog" data-day="${day}">${eventIcon('allenamento', 'Allenamento')} Allenamento</button>
     <button type="button" class="ghost-button" data-day-dialog="quickStepsDialog" data-day="${day}">${eventIcon('passi', 'Passi')} Passi</button>
-  </div></div>` + (events.map(e => `<p class="day-event">${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span>${calendarEventAction(e)}</p>`).join('') || '<p class="muted">Nessun evento.</p>');
+  </div></div><div class="day-event-list">` + (events.map(e => `<button type="button" class="day-event" data-edit-event='${escapeAttr(JSON.stringify(e))}'>${eventIcon(e.type, eventLabel(e))}<span><strong>${eventLabel(e)}</strong><br><span class="muted">${eventText(e)}</span></span>${calendarEventAction(e)}</button>`).join('') || '<p class="muted">Nessun evento.</p>') + '</div>';
   document.querySelectorAll('[data-day-dialog]').forEach(btn => btn.addEventListener('click', () => openDayDialog(btn.dataset.dayDialog, btn.dataset.day)));
-  document.querySelectorAll('[data-calendar-complete]').forEach(btn => btn.addEventListener('click', () => completeCalendarEvent(btn.dataset.calendarComplete, btn.dataset.eventId)));
+  document.querySelectorAll('[data-edit-event]').forEach(btn => btn.addEventListener('click', () => openEventEditDialog(JSON.parse(btn.dataset.editEvent))));
+  document.querySelectorAll('[data-calendar-complete]').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    completeCalendarEvent(btn.dataset.calendarComplete, btn.dataset.eventId);
+  }));
 }
 
 async function loadAdmin() {
@@ -381,8 +426,10 @@ function setupAppForms() {
   $('#sidebarToggle').addEventListener('click', toggleSidebar);
   $('#logoutBtn').addEventListener('click', async () => { await api('auth/logout', { method: 'POST', body: '{}' }); location.reload(); });
   document.querySelectorAll('[data-dialog]').forEach(btn => btn.addEventListener('click', () => {
+    const dialog = document.getElementById(btn.dataset.dialog);
+    resetDialogForm(dialog);
     loadEntryDefaults();
-    document.getElementById(btn.dataset.dialog)?.showModal();
+    dialog?.showModal();
   }));
   document.querySelectorAll('[data-close-dialog]').forEach(btn => btn.addEventListener('click', () => btn.closest('dialog')?.close()));
   $('#injectionForm').addEventListener('submit', submitJson('injections', afterInjectionsSaved));
@@ -431,9 +478,10 @@ function toggleSidebar() {
 }
 
 async function openDayDialog(dialogId, day) {
-  await loadEntryDefaults();
   const dialog = document.getElementById(dialogId);
   if (!dialog) return;
+  resetDialogForm(dialog);
+  await loadEntryDefaults();
   const dateTime = `${day}T${new Date().toTimeString().slice(0, 5)}`;
   const measuredAt = dialog.querySelector('input[name="measured_at"]');
   const scheduledAt = dialog.querySelector('input[name="scheduled_at"]');
@@ -442,6 +490,63 @@ async function openDayDialog(dialogId, day) {
   if (scheduledAt) scheduledAt.value = dateTime;
   if (stepDate) stepDate.value = day;
   dialog.showModal();
+}
+
+async function openEventEditDialog(event) {
+  await loadEntryDefaults();
+  const dialogMap = {
+    misurazione: 'quickMeasurementDialog',
+    iniezione: 'quickInjectionDialog',
+    allenamento: 'quickWorkoutDialog',
+    passi: 'quickStepsDialog'
+  };
+  const dialog = document.getElementById(dialogMap[event.type]);
+  if (!dialog) return;
+  resetDialogForm(dialog);
+  populateEventForm(dialog.querySelector('form'), event);
+  dialog.showModal();
+}
+
+function resetDialogForm(dialog) {
+  const form = dialog?.querySelector('form');
+  form?.reset();
+  const id = form?.querySelector('input[name="id"]');
+  if (id) id.value = '';
+}
+
+function populateEventForm(form, event) {
+  if (!form) return;
+  setFormValue(form, 'id', event.id || '');
+  if (event.type === 'misurazione') {
+    setFormValue(form, 'measured_at', inputDateTime(event.measured_at));
+    measurementColumns.forEach(([key]) => setFormValue(form, key, event[key] ?? ''));
+  }
+  if (event.type === 'iniezione') {
+    setFormValue(form, 'medication_name', event.medication_name || 'Mounjaro');
+    setFormValue(form, 'scheduled_at', inputDateTime(event.scheduled_at));
+    setFormValue(form, 'planned_dose_mg', event.planned_dose_mg ?? '');
+    setFormChecked(form, 'completed', event.status === 'completed');
+  }
+  if (event.type === 'allenamento') {
+    setFormValue(form, 'workout_type', event.workout_type || '');
+    setFormValue(form, 'scheduled_at', inputDateTime(event.scheduled_at));
+    setFormValue(form, 'duration_minutes', event.duration_minutes ?? '');
+    setFormChecked(form, 'completed', event.status === 'completed');
+  }
+  if (event.type === 'passi') {
+    setFormValue(form, 'step_date', event.step_date || event.event_date || '');
+    setFormValue(form, 'steps', event.steps ?? '');
+  }
+}
+
+function setFormValue(form, name, value) {
+  const input = form.querySelector(`[name="${name}"]`);
+  if (input) input.value = value ?? '';
+}
+
+function setFormChecked(form, name, checked) {
+  const input = form.querySelector(`[name="${name}"]`);
+  if (input) input.checked = Boolean(checked);
 }
 
 async function completeCalendarEvent(type, id) {
@@ -458,7 +563,9 @@ function submitJson(path, after) {
   return async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(e.target));
-    const result = await api(path, { method: 'POST', body: JSON.stringify(body) });
+    const id = body.id;
+    delete body.id;
+    const result = await api(id ? `${path}/${id}` : path, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
     e.target.closest('dialog')?.close();
     e.target.reset();
     after(result, e.target);
@@ -505,6 +612,12 @@ function populateControls() {
   $('#goalForm select[name="metric_key"]').innerHTML = $('#metricSelect').innerHTML;
   $('#quickGoalForm select[name="metric_key"]').innerHTML = metricOptions;
   $('#metricSelect').addEventListener('change', e => { state.metric = e.target.value; loadResults(); });
+  $('#dashboardMetricToggle').innerHTML = dashboardMetrics.map(metric => `<button type="button" data-dashboard-metric="${metric}" class="${metric === state.dashboardMetric ? 'active' : ''}">${metrics[metric]}</button>`).join('');
+  document.querySelectorAll('[data-dashboard-metric]').forEach(btn => btn.addEventListener('click', () => {
+    state.dashboardMetric = btn.dataset.dashboardMetric;
+    document.querySelectorAll('[data-dashboard-metric]').forEach(item => item.classList.toggle('active', item === btn));
+    loadDashboard();
+  }));
   const ranges = [['1m', '1 mese'], ['3m', '3 mesi'], ['6m', '6 mesi'], ['1y', '1 anno'], ['all', 'Sempre']];
   $('#topRangeTabs').innerHTML = ranges.map(([k, v]) => `<button type="button" data-top-range="${k}" class="${k === state.range ? 'active' : ''}">${v}</button>`).join('');
   document.querySelectorAll('[data-top-range]').forEach(btn => btn.addEventListener('click', () => {
@@ -524,7 +637,7 @@ function populateControls() {
     document.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', b === btn));
     loadResults();
   }));
-  $('#calendarLegend').innerHTML = Object.values(eventTypes).map(meta => `<span>${eventIcon(meta.className, meta.shortLabel)} ${meta.shortLabel}</span>`).join('');
+  $('#calendarLegend').innerHTML = Object.entries(eventTypes).map(([type, meta]) => `<span>${eventIcon(type, meta.shortLabel)} ${meta.shortLabel}</span>`).join('');
 }
 
 function hydrateDefaultDates() {
@@ -774,6 +887,8 @@ function inputValue(value, type) {
   if (type === 'datetime-local') return String(value).slice(0, 16).replace(' ', 'T');
   return value;
 }
+function inputDateTime(value) { return value ? String(value).slice(0, 16).replace(' ', 'T') : ''; }
+function escapeAttr(value) { return String(value).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function isoDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }

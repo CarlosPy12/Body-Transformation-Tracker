@@ -106,8 +106,25 @@ select option { color: #101418; }
 .entry-card strong { font-size: 1.02rem; }
 .entry-card span { color: var(--muted); font-size: .84rem; line-height: 1.45; font-weight: 500; }
 .summary-stack { display: grid; gap: .75rem; margin-bottom: .85rem; }
+.metric-toggle { display: inline-flex; flex-wrap: wrap; gap: 1rem; margin: 0 0 .85rem; }
+.metric-toggle button { position: relative; padding: .45rem .05rem .72rem; border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+.metric-toggle button::after { content: ""; position: absolute; left: 0; right: 0; bottom: .08rem; height: 2px; border-radius: 999px; background: transparent; }
+.metric-toggle button.active { color: var(--text); }
+.metric-toggle button.active::after { background: var(--teal); box-shadow: 0 0 14px rgba(34,216,207,.35); }
 .dashboard-metric-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
 .dashboard-metric-row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.combo-card { display: grid; gap: .85rem; align-items: stretch; }
+.glp-card { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.activity-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.combo-cell { min-width: 0; padding: .15rem .2rem; }
+.mini-metric { display: flex; align-items: center; gap: .78rem; min-height: 82px; }
+.mini-metric > div { display: grid; gap: .28rem; min-width: 0; }
+.mini-metric .label { color: var(--text); font-size: .85rem; }
+.mini-metric strong { font-size: 1.55rem; line-height: 1.05; overflow-wrap: anywhere; }
+.mini-metric small { color: var(--lime); font-size: .78rem; line-height: 1.3; }
+.progress-track { display: block; height: 5px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.12); margin: -.2rem .1rem .1rem 48px; }
+.progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
+.progress-track.lime i { background: var(--lime); }
 .card, .panel { border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius); background: linear-gradient(160deg, rgba(255,255,255,.062), rgba(255,255,255,.02)); box-shadow: none; }
 .card { min-height: 110px; padding: 1rem 1rem .9rem; display: grid; align-content: space-between; gap: .55rem; }
 .card-head { display: flex; align-items: center; gap: .72rem; }
@@ -154,7 +171,7 @@ select option { color: #101418; }
 .today-button { height: 46px; padding: 0 .95rem; display: inline-flex; align-items: center; justify-content: center; }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: .9rem; margin: -.25rem 0 .85rem; color: var(--muted); font-size: .84rem; }
 .calendar-legend span { display: inline-flex; align-items: center; gap: .4rem; }
-.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem; margin-bottom: 1.15rem; }
 .day { min-height: 112px; border: 1px solid var(--line); border-radius: 12px; padding: .55rem; background: rgba(255,255,255,.035); }
 .day button { width: 100%; height: 100%; padding: 0; background: transparent; color: var(--text); text-align: left; border: 0; display: grid; align-content: start; gap: .45rem; }
 .calendar-events { display: flex; gap: .38rem; flex-wrap: wrap; }
@@ -164,11 +181,13 @@ select option { color: #101418; }
 .event-icon.iniezione { color: var(--violet); }
 .event-icon.allenamento { color: var(--lime); }
 .event-icon.passi { color: var(--teal); }
-.day-event { display: flex; align-items: flex-start; gap: .62rem; margin: .85rem 0 0; }
+.day-event-list { display: grid; gap: .55rem; margin-top: .85rem; }
+.day-event { width: 100%; display: flex; align-items: flex-start; gap: .62rem; padding: .72rem .8rem; margin: 0; text-align: left; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.035); color: var(--text); }
+.day-event:hover { transform: none; border-color: rgba(34,216,207,.32); background: rgba(34,216,207,.055); }
 .day-head { grid-template-columns: 1fr auto; }
 .day-actions { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: flex-end; }
 .day-actions button { display: inline-flex; align-items: center; gap: .42rem; padding: .62rem .78rem; }
-.day-detail { padding: 1.25rem 1.35rem; }
+.day-detail { padding: 1.35rem 1.45rem; margin-top: 1.1rem; }
 .complete-inline { margin-left: auto; padding: .52rem .68rem; white-space: nowrap; }
 
 .measurements-panel { overflow: hidden; }
@@ -203,6 +222,7 @@ select option { color: #101418; }
   .main-panel { width: auto; padding: 1rem 1rem 6.8rem; margin: 0; }
   .metric-grid, .metric-grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-metric-row, .dashboard-metric-row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .glp-card, .activity-card { grid-template-columns: 1fr; }
   .quick-grid { grid-template-columns: 1fr; }
   .entry-launcher { grid-template-columns: 1fr; }
   .injection-form-grid { grid-template-columns: 1fr; }

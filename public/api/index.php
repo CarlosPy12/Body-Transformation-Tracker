@@ -70,16 +70,28 @@ try {
         $today = date('Y-m-d');
         $steps = $pdo->prepare('SELECT steps FROM daily_steps WHERE user_id = ? AND step_date = ?');
         $steps->execute([$user['id'], $today]);
+        $settings = $pdo->prepare('SELECT daily_steps_target FROM user_settings WHERE user_id = ? LIMIT 1');
+        $settings->execute([$user['id']]);
         $nextInjection = $pdo->prepare('SELECT i.*, m.name AS medication_name FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ? AND i.status = "scheduled" ORDER BY i.scheduled_at LIMIT 1');
         $nextInjection->execute([$user['id']]);
+        $currentInjection = $pdo->prepare('SELECT COALESCE(i.administered_dose_mg, i.planned_dose_mg) AS dose_mg, i.administered_at, i.scheduled_at, m.name AS medication_name FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ? AND i.status = "completed" ORDER BY COALESCE(i.administered_at, i.scheduled_at) DESC LIMIT 1');
+        $currentInjection->execute([$user['id']]);
+        $injectionCounts = $pdo->prepare('SELECT COALESCE(administered_dose_mg, planned_dose_mg) AS dose_mg, COUNT(*) AS total FROM glp1_injections WHERE user_id = ? AND status = "completed" GROUP BY COALESCE(administered_dose_mg, planned_dose_mg) ORDER BY dose_mg');
+        $injectionCounts->execute([$user['id']]);
         $workouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND completed_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND status = "completed"');
         $workouts->execute([$user['id']]);
+        $plannedWorkouts = $pdo->prepare('SELECT COUNT(*) FROM workout_sessions WHERE user_id = ? AND scheduled_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) AND scheduled_at <= UTC_TIMESTAMP() + INTERVAL 7 DAY');
+        $plannedWorkouts->execute([$user['id']]);
         Response::ok([
             'latest_measurement' => $latest,
             'metric_summary' => $metricSummary,
             'steps_today' => (int) ($steps->fetchColumn() ?: 0),
+            'steps_target' => (int) ($settings->fetchColumn() ?: 10000),
             'next_injection' => $nextInjection->fetch() ?: null,
+            'current_injection' => $currentInjection->fetch() ?: null,
+            'injection_counts' => $injectionCounts->fetchAll(),
             'completed_workouts_week' => (int) $workouts->fetchColumn(),
+            'scheduled_workouts_week' => (int) $plannedWorkouts->fetchColumn(),
         ]);
         return;
     }
@@ -257,6 +269,16 @@ try {
         return;
     }
 
+    if (preg_match('#^steps/(\d+)$#', $path, $m) && $method === 'PUT') {
+        require_csrf($auth);
+        $date = normalize_date((string) ($input['step_date'] ?? date('Y-m-d')));
+        $steps = max(0, (int) ($input['steps'] ?? 0));
+        $stmt = $pdo->prepare('UPDATE daily_steps SET step_date = ?, steps = ?, source = "manual", synced_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?');
+        $stmt->execute([$date, $steps, (int) $m[1], $user['id']]);
+        Response::ok(['updated' => $stmt->rowCount()]);
+        return;
+    }
+
     if ($path === 'injections' && $method === 'GET') {
         $sql = 'SELECT i.*, m.name AS medication_name FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ?';
         $values = [$user['id']];
@@ -319,6 +341,20 @@ try {
         return;
     }
 
+    if (preg_match('#^injections/(\d+)$#', $path, $m) && $method === 'PUT') {
+        require_csrf($auth);
+        $med = medication_id($pdo, (int) $user['id'], (string) ($input['medication_name'] ?? 'Mounjaro'));
+        $scheduledAt = normalize_measured_at(str_replace('T', ' ', (string) ($input['scheduled_at'] ?? date('Y-m-d H:i:s'))));
+        $dose = decimal_or_null($input['planned_dose_mg'] ?? null) ?? 0.0;
+        $status = !empty($input['completed']) ? 'completed' : 'scheduled';
+        $administeredAt = $status === 'completed' ? $scheduledAt : null;
+        $administeredDose = $status === 'completed' ? $dose : null;
+        $stmt = $pdo->prepare('UPDATE glp1_injections SET medication_id = ?, scheduled_at = ?, administered_at = ?, planned_dose_mg = ?, administered_dose_mg = ?, status = ?, notes = ? WHERE id = ? AND user_id = ?');
+        $stmt->execute([$med, $scheduledAt, $administeredAt, $dose, $administeredDose, $status, $input['notes'] ?? null, (int) $m[1], $user['id']]);
+        Response::ok(['updated' => $stmt->rowCount()]);
+        return;
+    }
+
     if (preg_match('#^injections/(\d+)$#', $path, $m) && $method === 'DELETE') {
         require_csrf($auth);
         $stmt = $pdo->prepare('DELETE FROM glp1_injections WHERE id = ? AND user_id = ?');
@@ -354,18 +390,28 @@ try {
         return;
     }
 
+    if (preg_match('#^workouts/(\d+)$#', $path, $m) && $method === 'PUT') {
+        require_csrf($auth);
+        $scheduledAt = normalize_measured_at(str_replace('T', ' ', (string) ($input['scheduled_at'] ?? date('Y-m-d H:i:s'))));
+        $completed = !empty($input['completed']);
+        $stmt = $pdo->prepare('UPDATE workout_sessions SET scheduled_at = ?, completed_at = ?, workout_type = ?, duration_minutes = ?, status = ?, notes = ? WHERE id = ? AND user_id = ?');
+        $stmt->execute([$scheduledAt, $completed ? $scheduledAt : null, $input['workout_type'] ?? 'Allenamento', int_or_null($input['duration_minutes'] ?? null), $completed ? 'completed' : 'scheduled', $input['notes'] ?? null, (int) $m[1], $user['id']]);
+        Response::ok(['updated' => $stmt->rowCount()]);
+        return;
+    }
+
     if ($path === 'calendar') {
         $month = $_GET['month'] ?? date('Y-m');
         $from = $month . '-01';
         $to = date('Y-m-t', strtotime($from));
         $events = [];
         foreach ([
-            ['body_measurements', 'measured_at', 'misurazione'],
-            ['glp1_injections', 'scheduled_at', 'iniezione'],
-            ['workout_sessions', 'scheduled_at', 'allenamento'],
-            ['daily_steps', 'step_date', 'passi'],
-        ] as [$table, $column, $type]) {
-            $stmt = $pdo->prepare("SELECT *, DATE({$column}) AS event_date FROM {$table} WHERE user_id = ? AND DATE({$column}) BETWEEN ? AND ?");
+            ['body_measurements', 'measured_at', 'misurazione', 'SELECT *, DATE(measured_at) AS event_date FROM body_measurements WHERE user_id = ? AND DATE(measured_at) BETWEEN ? AND ?'],
+            ['glp1_injections', 'scheduled_at', 'iniezione', 'SELECT i.*, m.name AS medication_name, DATE(i.scheduled_at) AS event_date FROM glp1_injections i JOIN glp1_medications m ON m.id = i.medication_id WHERE i.user_id = ? AND DATE(i.scheduled_at) BETWEEN ? AND ?'],
+            ['workout_sessions', 'scheduled_at', 'allenamento', 'SELECT *, DATE(scheduled_at) AS event_date FROM workout_sessions WHERE user_id = ? AND DATE(scheduled_at) BETWEEN ? AND ?'],
+            ['daily_steps', 'step_date', 'passi', 'SELECT *, DATE(step_date) AS event_date FROM daily_steps WHERE user_id = ? AND DATE(step_date) BETWEEN ? AND ?'],
+        ] as [$table, $column, $type, $sql]) {
+            $stmt = $pdo->prepare($sql);
             $stmt->execute([$user['id'], $from, $to]);
             foreach ($stmt->fetchAll() as $row) {
                 $row['type'] = $type;
@@ -411,6 +457,14 @@ function decimal_or_null(mixed $value): ?float
         return null;
     }
     return (float) str_replace(',', '.', (string) $value);
+}
+
+function int_or_null(mixed $value): ?int
+{
+    if ($value === null || trim((string) $value) === '') {
+        return null;
+    }
+    return max(0, (int) $value);
 }
 
 function normalize_date(string $value): string
@@ -487,6 +541,7 @@ function dashboard_metric_summary(PDO $pdo, int $userId): array
         'peso' => ['column' => 'weight_kg', 'goal' => 'peso'],
         'bmi' => ['column' => 'bmi', 'goal' => 'bmi'],
         'massa_grassa' => ['column' => 'body_fat', 'goal' => 'massa_grassa'],
+        'muscoli' => ['column' => 'muscle', 'goal' => 'muscoli'],
     ];
     $summary = [];
     foreach ($definitions as $key => $definition) {
