@@ -101,20 +101,22 @@ const doseBadgePlugin = {
     if (!badges.length) return;
     const meta = chart.getDatasetMeta(0);
     const { ctx, chartArea } = chart;
+    const mobile = isMobileViewport();
     ctx.save();
     badges.forEach(badge => {
       const point = meta.data[badge.index];
       if (!point) return;
       const text = `${fmt.format(badge.dose)} mg`;
-      const x = Math.min(Math.max(point.x - 12, chartArea.left + 4), chartArea.right - 86);
-      const y = Math.max(point.y - 48, chartArea.top + 6);
-      ctx.font = '700 12px ui-sans-serif, system-ui, sans-serif';
-      const width = Math.max(56, ctx.measureText(text).width + 18);
-      roundRect(ctx, x, y, width, 30, 8);
+      const height = mobile ? 23 : 30;
+      const x = Math.min(Math.max(point.x - 8, chartArea.left + 3), chartArea.right - (mobile ? 60 : 86));
+      const y = Math.max(point.y - (mobile ? 32 : 48), chartArea.top + 4);
+      ctx.font = `${mobile ? 600 : 700} ${mobile ? 10 : 12}px ui-sans-serif, system-ui, sans-serif`;
+      const width = Math.max(mobile ? 48 : 56, ctx.measureText(text).width + (mobile ? 12 : 18));
+      roundRect(ctx, x, y, width, height, 7);
       ctx.fillStyle = badge.color;
       ctx.fill();
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(text, x + 9, y + 20);
+      ctx.fillText(text, x + (mobile ? 6 : 9), y + (mobile ? 16 : 20));
     });
     ctx.restore();
   }
@@ -173,6 +175,7 @@ function showView(id) {
   document.querySelectorAll('.nav-button').forEach(b => b.classList.toggle('active', b.dataset.view === id));
   $('#pageTitle').textContent = sections.find(s => s[0] === id)?.[1] || 'Riepilogo';
   document.body.classList.toggle('calendar-mode', id === 'calendario');
+  document.body.classList.toggle('entry-mode', id === 'aggiungi');
   $('#topMetricField').hidden = id !== 'risultati';
   if (id === 'aggiungi') loadEntryDefaults();
   if (id === 'risultati') loadResults();
@@ -243,7 +246,8 @@ function renderWorkoutKpis(rows) {
     const completed = Number(row.completed || 0);
     const scheduled = Number(row.scheduled || 0);
     const total = Math.max(completed, scheduled);
-    return `<div class="workout-kpi" style="--accent:var(--lime)"><span class="event-icon allenamento">${iconSvg(meta.icon)}</span><span>${meta.label}</span><strong>${fmtInt.format(completed)} / ${fmtInt.format(total)}</strong></div>`;
+    const accent = key === 'basket' ? 'var(--coral)' : 'var(--lime)';
+    return `<div class="workout-kpi" style="--accent:${accent}"><span class="event-icon allenamento ${key}">${iconSvg(meta.icon)}</span><span>${meta.label}</span><strong>${fmtInt.format(completed)} / ${fmtInt.format(total)}</strong></div>`;
   }).join('');
 }
 
@@ -303,6 +307,7 @@ function drawMetricChart(canvasId, data, label) {
   const labels = (data.series || []).map(p => shortDate(p.date));
   const values = (data.series || []).map(p => Number(p.value));
   const doseTimeline = buildDoseTimeline(data.series || [], data.glp1_overlay || []);
+  const mobile = isMobileViewport();
   state.charts[canvasId] = new Chart(document.getElementById(canvasId), {
     type: 'line',
     data: {
@@ -313,8 +318,9 @@ function drawMetricChart(canvasId, data, label) {
         borderColor: '#22d8cf',
         backgroundColor: 'rgba(34,216,207,.12)',
         tension: .32,
-        pointRadius: 4,
-        pointHoverRadius: 6,
+        pointRadius: mobile ? 0 : 4,
+        pointHoverRadius: mobile ? 4 : 6,
+        borderWidth: mobile ? 2.4 : 2,
         pointBackgroundColor: doseTimeline.pointColors,
         pointBorderColor: doseTimeline.pointColors,
         segment: {
@@ -326,8 +332,8 @@ function drawMetricChart(canvasId, data, label) {
     },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: cssVar('--text') } }, tooltip: { intersect: false, mode: 'index' }, doseBadges: { badges: doseTimeline.badges } },
-      scales: { x: { ticks: { color: cssVar('--muted'), maxRotation: 0 }, grid: { color: chartGridColor() } }, y: { ticks: { color: cssVar('--muted') }, grid: { color: chartGridColor() } } }
+      plugins: { legend: { display: !mobile, labels: { color: cssVar('--text') } }, tooltip: { intersect: false, mode: 'index' }, doseBadges: { badges: doseTimeline.badges } },
+      scales: { x: { ticks: { color: cssVar('--muted'), maxRotation: 0, autoSkip: true, maxTicksLimit: mobile ? 4 : 8 }, grid: { color: chartGridColor() } }, y: { ticks: { color: cssVar('--muted'), maxTicksLimit: mobile ? 4 : 8 }, grid: { color: chartGridColor() } } }
     }
   });
 }
@@ -597,8 +603,8 @@ async function loadCalendar() {
   const first = new Date(`${month}-01T00:00:00`);
   const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
   const mondayOffset = (first.getDay() + 6) % 7;
-  const weekdayHeaders = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
-    .map(day => `<div class="weekday">${day}</div>`)
+  const weekdayHeaders = [['Lunedì', 'Lun'], ['Martedì', 'Mar'], ['Mercoledì', 'Mer'], ['Giovedì', 'Gio'], ['Venerdì', 'Ven'], ['Sabato', 'Sab'], ['Domenica', 'Dom']]
+    .map(([full, short]) => `<div class="weekday"><span class="weekday-full">${full}</span><span class="weekday-short">${short}</span></div>`)
     .join('');
   const leadingDays = Array.from({ length: mondayOffset }, () => '<div class="day empty-day" aria-hidden="true"></div>').join('');
   const monthDays = Array.from({ length: days }, (_, i) => {
@@ -737,6 +743,10 @@ function cssVar(name) {
 
 function chartGridColor() {
   return document.body.classList.contains('theme-light') ? 'rgba(16,32,34,.1)' : 'rgba(255,255,255,.08)';
+}
+
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 700px)').matches;
 }
 
 async function openDayDialog(dialogId, day) {
@@ -1227,7 +1237,7 @@ function iconSvg(name) {
     target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path></svg>',
     footsteps: '<svg viewBox="0 0 24 24"><path d="M7.5 13.5c1.5 0 2.5 1.2 2.5 2.8 0 2-1.1 3.7-2.8 3.7-1.4 0-2.4-1.1-2.4-2.7 0-1.9 1-3.8 2.7-3.8Z"></path><path d="M16.5 4c1.5 0 2.5 1.2 2.5 2.8 0 2-1.1 3.7-2.8 3.7-1.4 0-2.4-1.1-2.4-2.7C13.8 5.9 14.8 4 16.5 4Z"></path></svg>',
     dumbbell: '<svg viewBox="0 0 24 24"><path d="M6 7v10"></path><path d="M18 7v10"></path><path d="M3 9v6"></path><path d="M21 9v6"></path><path d="M6 12h12"></path></svg>',
-    basketball: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"></circle><path d="M4.2 9.2c4.2 1.2 8.4 1.2 15.6 0"></path><path d="M4.2 14.8c4.2-1.2 8.4-1.2 15.6 0"></path><path d="M12 3.5c-2 2.1-3 5-3 8.5s1 6.4 3 8.5"></path><path d="M12 3.5c2 2.1 3 5 3 8.5s-1 6.4-3 8.5"></path></svg>',
+    basketball: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"></circle><path d="M4.3 9.5c5.2 1.9 10.2 1.9 15.4 0"></path><path d="M4.3 14.5c5.2-1.9 10.2-1.9 15.4 0"></path><path d="M7 5.4c3.1 3.7 6.5 8.4 10 13.2"></path><path d="M17 5.4c-3.1 3.7-6.5 8.4-10 13.2"></path></svg>',
     physio: '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"></circle><path d="M6 21c1.1-3.8 3.1-6 6-6s4.9 2.2 6 6"></path><path d="M8 11h8"></path><path d="M12 7.5V15"></path><path d="m9 14-3 3"></path><path d="m15 14 3 3"></path></svg>'
   };
   return icons[name] || '';
@@ -1236,7 +1246,8 @@ function statusIt(s) { return ({ scheduled: 'Programmata', completed: 'Effettuat
 function eventIcon(type, label, event = null) {
   const meta = eventTypes[type] || eventTypes.misurazione;
   const icon = type === 'allenamento' && event ? workoutTypeMeta(event.workout_type).icon : meta.icon;
-  return `<span class="event-icon ${meta.className}" title="${label}" aria-label="${label}">${iconSvg(icon)}</span>`;
+  const subtype = type === 'allenamento' && event ? workoutTypeKey(event.workout_type) : '';
+  return `<span class="event-icon ${meta.className} ${subtype}" title="${label}" aria-label="${label}">${iconSvg(icon)}</span>`;
 }
 function eventLabel(e) { return e?.type === 'allenamento' ? workoutTypeMeta(e.workout_type).label : ((eventTypes[e.type] || {}).label || e.type); }
 function eventText(e) {
