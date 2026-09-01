@@ -109,6 +109,14 @@ Consiglio operativo: Health Sync aggiorna il CSV al massimo ogni 10 minuti, quin
 
 ## Notifiche Push
 
+Genera le chiavi VAPID una sola volta:
+
+```bash
+/usr/local/bin/php /home2/b9g6c7m1/kinetica-repo/tools/generate_vapid_keys.php mailto:tua-email@example.com
+```
+
+Incolla l'output nel `.env` come `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY`.
+
 Per i promemoria evento per evento importa una sola volta:
 
 ```bash
