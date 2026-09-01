@@ -465,6 +465,14 @@ try {
         return;
     }
 
+    if (preg_match('#^workouts/(\d+)$#', $path, $m) && $method === 'DELETE') {
+        require_csrf($auth);
+        $stmt = $pdo->prepare('DELETE FROM workout_sessions WHERE id = ? AND user_id = ?');
+        $stmt->execute([(int) $m[1], $user['id']]);
+        Response::ok(['deleted' => $stmt->rowCount()]);
+        return;
+    }
+
     if ($path === 'calendar') {
         $month = $_GET['month'] ?? date('Y-m');
         $from = $month . '-01';

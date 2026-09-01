@@ -81,7 +81,7 @@ select option:checked { color: #031212; background: var(--teal); }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 1.45rem .9rem 1rem; border-right: 1px solid rgba(255,255,255,.1); background: #071012; backdrop-filter: blur(18px); display: grid; grid-template-rows: auto auto 1fr auto; gap: 1.8rem; align-content: start; }
 body.theme-light .sidebar { background: #ffffff; border-right-color: rgba(16,32,34,.12); }
 .sidebar::after { content: ""; position: absolute; inset: 0 0 auto auto; width: 1px; height: 100%; background: linear-gradient(180deg, transparent, rgba(34,216,207,.3), transparent); pointer-events: none; }
-.sidebar-toggle { position: absolute; right: -17px; top: 1.55rem; z-index: 2; width: 34px; height: 34px; padding: 0; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-soft); color: var(--text); box-shadow: none; display: inline-grid; place-items: center; }
+.sidebar-toggle { position: absolute; right: -17px; top: 1.72rem; z-index: 2; width: 34px; height: 34px; padding: 0; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-soft); color: var(--text); box-shadow: none; display: inline-grid; place-items: center; }
 .sidebar-toggle svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
 .brand-row { display: flex; align-items: center; justify-content: flex-start; gap: .72rem; min-height: 48px; padding: 0 .28rem; }
 .brand-row strong { display: block; font-size: 1.15rem; line-height: 1; letter-spacing: 0; color: var(--text); }
@@ -110,7 +110,7 @@ body.theme-light .nav-button.active { background: rgba(0,143,138,.1); }
 .sidebar-collapsed .sidebar-footer .ghost-button { opacity: 0; width: 0; height: 0; min-height: 0; padding: 0; pointer-events: none; overflow: hidden; }
 .sidebar-collapsed .nav-button { justify-content: center; padding-inline: .5rem; }
 
-.main-panel { width: min(100% - 4rem, 1280px); padding: 1.65rem 0 6rem; margin: 0 auto; }
+.main-panel { width: min(100% - 2.5rem, 1540px); padding: 1.65rem 0 6rem; margin: 0 auto; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.2rem; }
 .topbar h1 { margin: 0 0 .7rem; font-size: 2.05rem; line-height: 1; letter-spacing: 0; }
 .topbar .muted { display: flex; align-items: center; gap: .38rem; font-size: .78rem; color: var(--text); }
@@ -251,6 +251,12 @@ body.theme-light .nav-button.active { background: rgba(0,143,138,.1); }
 
 .measurements-panel { overflow: hidden; }
 .table-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--line); border-radius: 14px; margin-top: .9rem; }
+.table-tools { display: flex; align-items: end; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+.table-tools label { min-width: min(100%, 300px); }
+.table-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.table-actions button { min-height: 40px; padding: .58rem .72rem; border-radius: 8px; font-size: .82rem; }
+.select-cell { width: 42px; text-align: center; }
+.select-cell input { width: auto; min-width: 0; }
 .data-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .82rem; }
 .data-table th, .data-table td { padding: .55rem; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; vertical-align: top; }
 .data-table th { position: sticky; top: 0; z-index: 1; background: var(--panel-strong); color: var(--text); font-weight: 760; }

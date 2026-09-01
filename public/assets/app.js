@@ -392,6 +392,13 @@ async function loadInjections() {
   const rows = await api(`injections${rangeQuery()}&include_future=1`);
   $('#injectionTable').innerHTML = renderInjectionTable(rows);
   makeSortable($('#injectionTable'));
+  setupTableTools($('#injectionTable'), {
+    placeholder: 'Cerca farmaco, dose, data, stato...',
+    actions: [
+      ['complete-injections', 'Segna effettuate'],
+      ['delete-injections', 'Elimina']
+    ]
+  });
   document.querySelectorAll('[data-complete]').forEach(btn => btn.addEventListener('click', async () => {
     await api(`injections/${btn.dataset.complete}/complete`, { method: 'POST', body: JSON.stringify({ administered_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
     loadInjections();
@@ -415,16 +422,102 @@ async function loadActivities() {
   $('#activityStepsTable').innerHTML = renderStepsTable(steps);
   makeSortable($('#activityWorkoutTable'));
   makeSortable($('#activityStepsTable'));
+  setupTableTools($('#activityWorkoutTable'), {
+    placeholder: 'Cerca tipo, data, ora, durata, stato...',
+    actions: [
+      ['complete-workouts', 'Segna effettuati'],
+      ['delete-workouts', 'Elimina']
+    ]
+  });
+  setupTableTools($('#activityStepsTable'), { placeholder: 'Cerca data, passi, origine...', actions: [] });
   document.querySelectorAll('[data-complete-workout]').forEach(btn => btn.addEventListener('click', async () => {
     await api(`workouts/${btn.dataset.completeWorkout}/complete`, { method: 'POST', body: JSON.stringify({ completed_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }) });
     loadActivities();
     loadDashboard();
     if (state.active === 'calendario') loadCalendar();
   }));
+  document.querySelectorAll('[data-delete-workout]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Eliminare questo allenamento?')) return;
+    await api(`workouts/${btn.dataset.deleteWorkout}`, { method: 'DELETE', body: '{}' });
+    loadActivities();
+    loadDashboard();
+    if (state.active === 'calendario') loadCalendar();
+  }));
+}
+
+function setupTableTools(table, config) {
+  if (!table) return;
+  const wrap = table.closest('.table-wrap');
+  if (!wrap) return;
+  const toolbarId = `${table.id}Tools`;
+  document.getElementById(toolbarId)?.remove();
+  const actions = config.actions || [];
+  const toolbar = document.createElement('div');
+  toolbar.id = toolbarId;
+  toolbar.className = 'table-tools';
+  toolbar.innerHTML = `<label>Cerca <input type="search" data-table-search="${table.id}" placeholder="${escapeAttr(config.placeholder || 'Cerca...')}"></label>
+    <div class="table-actions">
+      ${actions.length ? `<span class="muted" data-selection-count="${table.id}">0 selezionati</span>` : ''}
+      ${actions.map(([action, label]) => `<button type="button" class="${action.includes('delete') ? 'danger-button' : 'ghost-button'}" data-bulk-action="${action}" data-table="${table.id}">${label}</button>`).join('')}
+    </div>`;
+  wrap.before(toolbar);
+  toolbar.querySelector('[data-table-search]')?.addEventListener('input', event => filterTableRows(table, event.target.value));
+  table.querySelector('[data-select-all]')?.addEventListener('change', event => {
+    table.querySelectorAll('tbody tr:not([hidden]) [data-row-select]').forEach(input => { input.checked = event.target.checked; });
+    updateSelectionCount(table);
+  });
+  table.querySelectorAll('[data-row-select]').forEach(input => input.addEventListener('change', () => updateSelectionCount(table)));
+  toolbar.querySelectorAll('[data-bulk-action]').forEach(button => button.addEventListener('click', () => bulkTableAction(table, button.dataset.bulkAction)));
+  updateSelectionCount(table);
+}
+
+function filterTableRows(table, query) {
+  const needle = String(query || '').trim().toLocaleLowerCase('it-IT');
+  table.querySelectorAll('tbody tr').forEach(row => {
+    const text = (row.dataset.search || row.textContent || '').toLocaleLowerCase('it-IT');
+    row.hidden = needle !== '' && !text.includes(needle);
+    if (row.hidden) row.querySelector('[data-row-select]') && (row.querySelector('[data-row-select]').checked = false);
+  });
+  const all = table.querySelector('[data-select-all]');
+  if (all) all.checked = false;
+  updateSelectionCount(table);
+}
+
+function selectedTableIds(table) {
+  return [...table.querySelectorAll('tbody tr:not([hidden]) [data-row-select]:checked')]
+    .map(input => input.closest('tr')?.dataset.bulkId)
+    .filter(Boolean);
+}
+
+function updateSelectionCount(table) {
+  const count = selectedTableIds(table).length;
+  const target = document.querySelector(`[data-selection-count="${table.id}"]`);
+  if (target) target.textContent = `${fmtInt.format(count)} selezionati`;
+}
+
+async function bulkTableAction(table, action) {
+  const ids = selectedTableIds(table);
+  if (!ids.length) return alert('Seleziona almeno una riga visibile.');
+  const destructive = action.includes('delete');
+  if (!confirm(`${destructive ? 'Eliminare' : 'Aggiornare'} ${ids.length} righe selezionate?`)) return;
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  for (const id of ids) {
+    if (action === 'complete-injections') await api(`injections/${id}/complete`, { method: 'POST', body: JSON.stringify({ administered_at: now }) });
+    if (action === 'delete-injections') await api(`injections/${id}`, { method: 'DELETE', body: '{}' });
+    if (action === 'complete-workouts') await api(`workouts/${id}/complete`, { method: 'POST', body: JSON.stringify({ completed_at: now }) });
+    if (action === 'delete-workouts') await api(`workouts/${id}`, { method: 'DELETE', body: '{}' });
+    if (action === 'delete-measurements') await api(`measurements/${id}`, { method: 'DELETE', body: '{}' });
+  }
+  if (table.id === 'injectionTable') loadInjections();
+  if (table.id === 'activityWorkoutTable') loadActivities();
+  if (table.id === 'measurementsTable') loadMeasurementsTable();
+  loadDashboard();
+  if (state.active === 'calendario') loadCalendar();
 }
 
 function renderWorkoutTable(rows) {
   const head = `<thead><tr>
+    <th class="select-cell"><input type="checkbox" data-select-all aria-label="Seleziona tutti gli allenamenti visibili"></th>
     <th data-sort="text">Tipo</th>
     <th data-sort="date">Data</th>
     <th data-sort="text">Ora</th>
@@ -434,16 +527,21 @@ function renderWorkoutTable(rows) {
   </tr></thead>`;
   const body = rows.map(row => {
     const scheduled = new Date(row.scheduled_at.replace(' ', 'T'));
-    return `<tr>
+    const searchable = `${workoutTypeMeta(row.workout_type).label} ${dateOnly(row.scheduled_at)} ${timeOnly(scheduled)} ${row.duration_minutes || ''} ${statusIt(row.status)}`;
+    return `<tr data-bulk-id="${row.id}" data-search="${escapeAttr(searchable)}">
+      <td class="select-cell"><input type="checkbox" data-row-select aria-label="Seleziona allenamento"></td>
       <td>${workoutTypeMeta(row.workout_type).label}</td>
       <td data-value="${row.scheduled_at}">${dateOnly(row.scheduled_at)}</td>
       <td>${timeOnly(scheduled)}</td>
       <td data-value="${Number(row.duration_minutes || 0)}">${row.duration_minutes ? `${fmtInt.format(row.duration_minutes)} min` : 'N/D'}</td>
       <td>${statusIt(row.status)}</td>
-      <td class="row-actions">${row.status === 'scheduled' ? `<button type="button" data-complete-workout="${row.id}">Segna effettuato</button>` : ''}</td>
+      <td class="row-actions">
+        ${row.status === 'scheduled' ? `<button type="button" data-complete-workout="${row.id}">Segna effettuato</button>` : ''}
+        <button type="button" class="danger-button" data-delete-workout="${row.id}">Cancella</button>
+      </td>
     </tr>`;
   }).join('');
-  return `${head}<tbody>${body || '<tr><td colspan="6">Nessun allenamento nel periodo.</td></tr>'}</tbody>`;
+  return `${head}<tbody>${body || '<tr><td colspan="7">Nessun allenamento nel periodo.</td></tr>'}</tbody>`;
 }
 
 function renderStepsTable(rows) {
@@ -452,7 +550,7 @@ function renderStepsTable(rows) {
     <th data-sort="number">Passi</th>
     <th data-sort="text">Origine</th>
   </tr></thead>`;
-  const body = rows.map(row => `<tr>
+  const body = rows.map(row => `<tr data-search="${escapeAttr(`${dateOnly(row.step_date)} ${row.steps || 0} ${row.source || 'manual'}`)}">
     <td data-value="${row.step_date}">${dateOnly(row.step_date)}</td>
     <td data-value="${Number(row.steps || 0)}">${fmtInt.format(row.steps)} passi</td>
     <td>${row.source || 'manual'}</td>
@@ -462,6 +560,7 @@ function renderStepsTable(rows) {
 
 function renderInjectionTable(rows) {
   const head = `<thead><tr>
+    <th class="select-cell"><input type="checkbox" data-select-all aria-label="Seleziona tutte le iniezioni visibili"></th>
     <th data-sort="text">Farmaco</th>
     <th data-sort="number">Dosaggio</th>
     <th data-sort="date">Data</th>
@@ -472,7 +571,9 @@ function renderInjectionTable(rows) {
   const body = rows.map(row => {
     const scheduled = new Date(row.scheduled_at.replace(' ', 'T'));
     const status = statusIt(row.status);
-    return `<tr>
+    const searchable = `${row.medication_name} ${fmt.format(row.planned_dose_mg)} ${dateOnly(row.scheduled_at)} ${timeOnly(scheduled)} ${status}`;
+    return `<tr data-bulk-id="${row.id}" data-search="${escapeAttr(searchable)}">
+      <td class="select-cell"><input type="checkbox" data-row-select aria-label="Seleziona iniezione"></td>
       <td>${row.medication_name}</td>
       <td data-value="${Number(row.planned_dose_mg)}">${fmt.format(row.planned_dose_mg)} mg</td>
       <td data-value="${row.scheduled_at}">${dateOnly(row.scheduled_at)}</td>
@@ -484,7 +585,7 @@ function renderInjectionTable(rows) {
       </td>
     </tr>`;
   }).join('');
-  return `${head}<tbody>${body || '<tr><td colspan="6">Nessuna iniezione registrata.</td></tr>'}</tbody>`;
+  return `${head}<tbody>${body || '<tr><td colspan="7">Nessuna iniezione registrata.</td></tr>'}</tbody>`;
 }
 
 async function loadCalendar() {
@@ -926,18 +1027,23 @@ async function loadMeasurementsTable() {
   $('#measurementsTable').hidden = false;
   $('#measurementsTable').innerHTML = renderMeasurementsTable(rows);
   makeSortable($('#measurementsTable'));
+  setupTableTools($('#measurementsTable'), {
+    placeholder: 'Cerca data, peso, BMI, massa grassa...',
+    actions: [['delete-measurements', 'Elimina']]
+  });
   $('#measurementsStatus').textContent = `${rows.length} misurazioni visualizzate. Le modifiche aggiornano anche la deduplica.`;
   document.querySelectorAll('[data-save-measurement]').forEach(btn => btn.addEventListener('click', saveMeasurementRow));
   document.querySelectorAll('[data-delete-measurement]').forEach(btn => btn.addEventListener('click', deleteMeasurementRow));
 }
 
 function renderMeasurementsTable(rows) {
-  const head = `<thead><tr>${measurementColumns.map(([key, label, type]) => `<th data-sort="${type === 'number' ? 'number' : type === 'datetime-local' ? 'date' : 'text'}">${label}</th>`).join('')}<th>Azioni</th></tr></thead>`;
-  const body = rows.map(row => `<tr data-measurement-row="${row.id}">
+  const head = `<thead><tr><th class="select-cell"><input type="checkbox" data-select-all aria-label="Seleziona tutte le misurazioni visibili"></th>${measurementColumns.map(([key, label, type]) => `<th data-sort="${type === 'number' ? 'number' : type === 'datetime-local' ? 'date' : 'text'}">${label}</th>`).join('')}<th>Azioni</th></tr></thead>`;
+  const body = rows.map(row => `<tr data-measurement-row="${row.id}" data-bulk-id="${row.id}" data-search="${escapeAttr(measurementColumns.map(([key]) => row[key] ?? '').join(' '))}">
+    <td class="select-cell"><input type="checkbox" data-row-select aria-label="Seleziona misurazione"></td>
     ${measurementColumns.map(([key, label, type]) => `<td><input aria-label="${label}" name="${key}" type="${type}" step="0.1" value="${inputValue(row[key], type)}"></td>`).join('')}
     <td class="row-actions"><button type="button" data-save-measurement="${row.id}">Salva</button><button type="button" class="danger-button" data-delete-measurement="${row.id}">Elimina</button></td>
   </tr>`).join('');
-  return `${head}<tbody>${body || '<tr><td colspan="21">Nessuna misurazione importata.</td></tr>'}</tbody>`;
+  return `${head}<tbody>${body || '<tr><td colspan="22">Nessuna misurazione importata.</td></tr>'}</tbody>`;
 }
 
 function makeSortable(table) {

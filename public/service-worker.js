@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kinetica-v19';
+const CACHE_NAME = 'kinetica-v20';
 const APP_SHELL = ['/', '/manifest.json', '/assets/app.css', '/assets/app.js', '/assets/icon.svg'];
 
 self.addEventListener('install', (event) => {
