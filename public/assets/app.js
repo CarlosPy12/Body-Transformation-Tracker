@@ -596,13 +596,19 @@ async function loadCalendar() {
   const byDay = rows.reduce((acc, row) => ((acc[row.event_date] ||= []).push(row), acc), {});
   const first = new Date(`${month}-01T00:00:00`);
   const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
-  $('#calendarGrid').innerHTML = Array.from({ length: days }, (_, i) => {
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const weekdayHeaders = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
+    .map(day => `<div class="weekday">${day}</div>`)
+    .join('');
+  const leadingDays = Array.from({ length: mondayOffset }, () => '<div class="day empty-day" aria-hidden="true"></div>').join('');
+  const monthDays = Array.from({ length: days }, (_, i) => {
     const day = String(i + 1).padStart(2, '0');
     const key = `${month}-${day}`;
     const events = byDay[key] || [];
     const icons = events.map(e => eventIcon(e.type, eventText(e), e)).join('');
     return `<div class="day"><button data-day="${key}"><strong>${i + 1}</strong><span class="calendar-events">${icons}</span></button></div>`;
   }).join('');
+  $('#calendarGrid').innerHTML = weekdayHeaders + leadingDays + monthDays;
   document.querySelectorAll('[data-day]').forEach(btn => btn.addEventListener('click', () => {
     const events = byDay[btn.dataset.day] || [];
     renderDayDetails(btn.dataset.day, events);
