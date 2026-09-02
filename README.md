@@ -27,6 +27,7 @@ PWA PHP 8/MySQL per monitorare peso, composizione corporea, GLP-1, obiettivi, al
 13. Inserisci `GOOGLE_DRIVE_STEPS_FOLDER_ID` e `GOOGLE_SERVICE_ACCOUNT_JSON_PATH` nel `.env`.
 14. Configura cron cPanel:
     - `*/10 * * * * /usr/local/bin/php /home/utente/app/cron/sync_steps.php`
+    - `0 1 * * * /usr/local/bin/php /home/utente/app/cron/sync_steps.php --date=yesterday`
     - `*/5 * * * * /usr/local/bin/php /home/utente/app/cron/send_notifications.php`
 15. Apri il dominio, fai login e installa la PWA su Android dal browser.
 
@@ -106,6 +107,14 @@ STEPS_SYNC_START_DATE=2026-09-01
 Se `STEPS_SYNC_START_DATE` non e configurata, il cron processa solo file dalla data corrente in avanti.
 
 Consiglio operativo: Health Sync aggiorna il CSV al massimo ogni 10 minuti, quindi il cron passi ha senso ogni 10 minuti. Se lo fai piu spesso non ottieni dati piu freschi, ma aumenti solo le chiamate a Drive.
+
+Per chiudere bene il giorno precedente aggiungi anche un cron notturno:
+
+```cron
+0 1 * * * /usr/local/bin/php /home2/b9g6c7m1/kinetica-repo/cron/sync_steps.php --date=yesterday
+```
+
+Questo alle 01:00 processa solo il file giornaliero di ieri, per esempio il 2 settembre rilegge `Passi 2026.09.01 ...csv`, somma i passi e aggiorna la riga `daily_steps` gia esistente.
 
 ## Notifiche Push
 

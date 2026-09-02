@@ -14,6 +14,7 @@ $pdo = Database::pdo();
 $folderId = Env::get('GOOGLE_DRIVE_STEPS_FOLDER_ID');
 $credentials = Env::get('GOOGLE_SERVICE_ACCOUNT_JSON_PATH');
 $syncStartDate = Env::get('STEPS_SYNC_START_DATE', date('Y-m-d'));
+$targetDate = sync_target_date($argv ?? []);
 
 if (!$folderId || !$credentials || !class_exists(Google\Client::class)) {
     Logger::write('sync', 'Google Drive non configurato o dipendenze Composer mancanti');
@@ -38,6 +39,9 @@ foreach ($users as $user) {
         foreach ($files->getFiles() as $file) {
             $totals['seen']++;
             $fileDate = StepsCsvParser::dateFromFileName($file->getName());
+            if ($targetDate !== null && $fileDate !== $targetDate) {
+                continue;
+            }
             if ($fileDate === null || $fileDate < $syncStartDate) {
                 continue;
             }
@@ -58,10 +62,31 @@ foreach ($users as $user) {
 }
 
 echo sprintf(
-    "Sync passi completato. File visti: %d, eleggibili: %d, processati: %d, saltati: %d, errori: %d.\n",
+    "Sync passi completato%s. File visti: %d, eleggibili: %d, processati: %d, saltati: %d, errori: %d.\n",
+    $targetDate ? " per {$targetDate}" : '',
     $totals['seen'],
     $totals['eligible'],
     $totals['processed'],
     $totals['skipped'],
     $totals['errors']
 );
+
+function sync_target_date(array $args): ?string
+{
+    foreach (array_slice($args, 1) as $arg) {
+        if ($arg === '--yesterday') {
+            return date('Y-m-d', strtotime('-1 day'));
+        }
+        if (str_starts_with($arg, '--date=')) {
+            $value = substr($arg, 7);
+            if ($value === 'yesterday') {
+                return date('Y-m-d', strtotime('-1 day'));
+            }
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                return $value;
+            }
+        }
+    }
+
+    return null;
+}
