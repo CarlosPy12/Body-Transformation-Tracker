@@ -607,12 +607,13 @@ async function loadCalendar() {
     .map(([full, short]) => `<div class="weekday"><span class="weekday-full">${full}</span><span class="weekday-short">${short}</span></div>`)
     .join('');
   const leadingDays = Array.from({ length: mondayOffset }, () => '<div class="day empty-day" aria-hidden="true"></div>').join('');
+  const today = isoDate(new Date());
   const monthDays = Array.from({ length: days }, (_, i) => {
     const day = String(i + 1).padStart(2, '0');
     const key = `${month}-${day}`;
     const events = byDay[key] || [];
     const icons = events.map(e => eventIcon(e.type, eventText(e), e)).join('');
-    return `<div class="day"><button data-day="${key}"><strong>${i + 1}</strong><span class="calendar-events">${icons}</span></button></div>`;
+    return `<div class="day ${key === today ? 'today-day' : ''}"><button data-day="${key}"><strong>${i + 1}</strong><span class="calendar-events">${icons}</span></button></div>`;
   }).join('');
   $('#calendarGrid').innerHTML = weekdayHeaders + leadingDays + monthDays;
   document.querySelectorAll('[data-day]').forEach(btn => btn.addEventListener('click', () => {
